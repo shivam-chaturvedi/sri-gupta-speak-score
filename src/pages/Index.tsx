@@ -84,6 +84,9 @@ const Index = () => {
           stance={sessionData.stance}
           score={scoreData.score}
           feedback={scoreData.feedback}
+          transcript={scoreData.transcript}
+          missingPoints={scoreData.missingPoints}
+          enhancedArgument={scoreData.enhancedArgument}
           onTryAgain={handleTryAgain}
           onNewTopic={handleNewTopic}
         />

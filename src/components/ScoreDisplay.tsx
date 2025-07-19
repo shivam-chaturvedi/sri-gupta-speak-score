@@ -1,15 +1,10 @@
-import { Trophy, Target, Heart, Zap, RotateCcw, Share2 } from "lucide-react";
+import { Trophy, Target, Heart, Zap, RotateCcw, Share2, MessageSquare, Lightbulb, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-
-interface Score {
-  logic: number;
-  rhetoric: number;
-  empathy: number;
-  delivery: number;
-}
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { type ScoreData } from "@/utils/mockScoring";
 
 interface ScoreDisplayProps {
   motion: {
@@ -17,14 +12,11 @@ interface ScoreDisplayProps {
     category: string;
   };
   stance?: string;
-  score: Score;
-  feedback: {
-    logic: string;
-    rhetoric: string;
-    empathy: string;
-    delivery: string;
-    overall: string;
-  };
+  score: ScoreData['score'];
+  feedback: ScoreData['feedback'];
+  transcript: string;
+  missingPoints: string[];
+  enhancedArgument: string;
   onTryAgain: () => void;
   onNewTopic: () => void;
 }
@@ -34,10 +26,13 @@ export function ScoreDisplay({
   stance, 
   score, 
   feedback, 
+  transcript,
+  missingPoints,
+  enhancedArgument,
   onTryAgain, 
   onNewTopic 
 }: ScoreDisplayProps) {
-  const totalScore = score.logic + score.rhetoric + score.empathy + score.delivery;
+  const totalScore = score.total;
   const maxScore = 30;
   
   const getScoreColor = (points: number, max: number) => {
@@ -95,7 +90,7 @@ export function ScoreDisplay({
   ];
 
   return (
-    <div className="w-full max-w-2xl mx-auto space-y-6">
+    <div className="w-full max-w-4xl mx-auto space-y-6">
       {/* Header with topic */}
       <Card className="bg-gradient-to-br from-speech-card to-speech-card/90 border-0 shadow-speech">
         <CardHeader className="text-center pb-4">
@@ -156,10 +151,78 @@ export function ScoreDisplay({
         ))}
       </div>
 
+      {/* Three-Panel Results Display */}
+      <Card className="bg-gradient-to-br from-speech-card to-speech-card/90 border-0 shadow-speech">
+        <CardHeader>
+          <CardTitle className="text-foreground flex items-center gap-2">
+            <Star className="w-5 h-5 text-primary" />
+            Detailed Analysis
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Tabs defaultValue="transcript" className="w-full">
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="transcript" className="flex items-center gap-2">
+                <MessageSquare className="w-4 h-4" />
+                Your Argument
+              </TabsTrigger>
+              <TabsTrigger value="missing" className="flex items-center gap-2">
+                <Lightbulb className="w-4 h-4" />
+                What You Missed
+              </TabsTrigger>
+              <TabsTrigger value="enhanced" className="flex items-center gap-2">
+                <Star className="w-4 h-4" />
+                Enhanced Version
+              </TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="transcript" className="mt-4">
+              <div className="prose prose-sm max-w-none">
+                <h4 className="text-foreground font-semibold mb-3">Your Original Speech</h4>
+                <div className="bg-muted/30 p-4 rounded-lg border-l-4 border-primary">
+                  <p className="text-muted-foreground leading-relaxed">{transcript}</p>
+                </div>
+              </div>
+            </TabsContent>
+            
+            <TabsContent value="missing" className="mt-4">
+              <div className="prose prose-sm max-w-none">
+                <h4 className="text-foreground font-semibold mb-3">Missing Points Analysis</h4>
+                <p className="text-muted-foreground mb-4">
+                  Here are key arguments and evidence you could include to strengthen your position:
+                </p>
+                <ul className="space-y-2">
+                  {missingPoints.map((point, index) => (
+                    <li key={index} className="flex items-start gap-3">
+                      <div className="w-2 h-2 bg-warning rounded-full mt-2 flex-shrink-0" />
+                      <span className="text-muted-foreground">{point}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </TabsContent>
+            
+            <TabsContent value="enhanced" className="mt-4">
+              <div className="prose prose-sm max-w-none">
+                <h4 className="text-foreground font-semibold mb-3">Enhanced Argument</h4>
+                <p className="text-muted-foreground mb-4">
+                  Here's how your argument could be improved with better structure and the missing points:
+                </p>
+                <div className="bg-success/10 p-4 rounded-lg border-l-4 border-success">
+                  <div className="text-muted-foreground leading-relaxed whitespace-pre-line">
+                    {enhancedArgument}
+                  </div>
+                </div>
+              </div>
+            </TabsContent>
+          </Tabs>
+        </CardContent>
+      </Card>
+
       {/* Overall Feedback */}
       <Card className="bg-gradient-to-br from-speech-card to-speech-card/90 border-0 shadow-card">
         <CardHeader>
-          <CardTitle className="text-foreground">Overall Feedback</CardTitle>
+          <CardTitle className="text-foreground">Coach's Feedback</CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-muted-foreground leading-relaxed">{feedback.overall}</p>
