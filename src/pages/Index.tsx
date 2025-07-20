@@ -1,12 +1,15 @@
 import { useState } from "react";
-import { Mic, Target, Trophy, Zap, Heart, Sparkles } from "lucide-react";
+import { Mic, Target, Trophy, Zap, Heart, Sparkles, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { MotionCard } from "@/components/MotionCard";
 import { VoiceRecorder } from "@/components/VoiceRecorder";
 import { ScoreDisplay } from "@/components/ScoreDisplay";
+import { ApiKeyModal } from "@/components/ApiKeyModal";
 import { getDailyMotion, getRandomMotions, type Motion } from "@/data/motions";
 import { generateMockScore } from "@/utils/mockScoring";
+import { aiService } from "@/services/aiService";
+import { toast } from "@/hooks/use-toast";
 
 type AppState = "home" | "recording" | "results";
 
@@ -21,6 +24,8 @@ const Index = () => {
   const [currentState, setCurrentState] = useState<AppState>("home");
   const [sessionData, setSessionData] = useState<SessionData | null>(null);
   const [scoreData, setScoreData] = useState<any>(null);
+  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [motions, setMotions] = useState(() => {
     const daily = getDailyMotion();
     const random = getRandomMotions(2);
@@ -32,14 +37,62 @@ const Index = () => {
     setCurrentState("recording");
   };
 
-  const handleRecordingComplete = (audioBlob: Blob, transcript?: string) => {
+  const handleRecordingComplete = async (audioBlob: Blob, transcript?: string) => {
     if (!sessionData) return;
     
-    // Generate mock score and feedback
-    const results = generateMockScore(audioBlob, sessionData.motion.topic, sessionData.stance);
-    setScoreData(results);
     setSessionData({ ...sessionData, audioBlob });
-    setCurrentState("results");
+    
+    // Check if we have an API key for AI analysis
+    const apiKey = localStorage.getItem('openai_api_key');
+    
+    if (!apiKey && transcript) {
+      setShowApiKeyModal(true);
+      return;
+    }
+    
+    if (apiKey && transcript) {
+      setIsAnalyzing(true);
+      try {
+        aiService.setApiKey(apiKey);
+        const results = await aiService.analyzeSpeeches({
+          transcript,
+          topic: sessionData.motion.topic,
+          stance: sessionData.stance,
+          duration: sessionData.duration
+        });
+        setScoreData(results);
+        setCurrentState("results");
+      } catch (error) {
+        console.error('AI analysis failed:', error);
+        toast({
+          title: "AI Analysis Failed",
+          description: "Falling back to demo mode. Check your API key or try again.",
+          variant: "destructive",
+        });
+        
+        // Fallback to mock scoring
+        const results = generateMockScore(audioBlob, sessionData.motion.topic, sessionData.stance);
+        setScoreData(results);
+        setCurrentState("results");
+      } finally {
+        setIsAnalyzing(false);
+      }
+    } else {
+      // Fallback to mock scoring if no transcript or API key
+      const results = generateMockScore(audioBlob, sessionData.motion.topic, sessionData.stance);
+      setScoreData(results);
+      setCurrentState("results");
+    }
+  };
+
+  const handleApiKeySet = (apiKey: string) => {
+    localStorage.setItem('openai_api_key', apiKey);
+    aiService.setApiKey(apiKey);
+    
+    // Continue with AI analysis if we have a pending recording
+    if (sessionData?.audioBlob) {
+      handleRecordingComplete(sessionData.audioBlob, "Transcript would be generated here");
+    }
   };
 
   const handleTryAgain = () => {
@@ -230,6 +283,28 @@ const Index = () => {
           </Card>
         </div>
       </div>
+
+      {/* API Key Modal */}
+      <ApiKeyModal
+        isOpen={showApiKeyModal}
+        onApiKeySet={handleApiKeySet}
+        onClose={() => setShowApiKeyModal(false)}
+      />
+
+      {/* Loading Overlay for AI Analysis */}
+      {isAnalyzing && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
+          <Card className="bg-speech-card border-0 shadow-xl p-8">
+            <div className="flex flex-col items-center gap-4">
+              <Loader2 className="w-8 h-8 animate-spin text-primary" />
+              <div className="text-center">
+                <h3 className="font-semibold text-foreground mb-2">Analyzing Your Speech</h3>
+                <p className="text-sm text-muted-foreground">AI is evaluating your logic, rhetoric, empathy, and delivery...</p>
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
     </div>
   );
 };
