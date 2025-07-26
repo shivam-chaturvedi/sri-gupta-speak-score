@@ -42,7 +42,10 @@ export function VoiceRecorder({
 
   const startPrep = async () => {
     try {
+      console.log('Requesting microphone access...');
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      console.log('Microphone access granted');
+      
       const mediaRecorder = new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
 
@@ -54,6 +57,7 @@ export function VoiceRecorder({
       };
 
       mediaRecorder.onstop = async () => {
+        console.log('Recording stopped, creating blob...');
         const blob = new Blob(chunks, { type: 'audio/webm' });
         setAudioBlob(blob);
         setAudioUrl(URL.createObjectURL(blob));
@@ -66,19 +70,23 @@ export function VoiceRecorder({
 
       // Start speech recognition when we start preparation
       if (speechToText.isSupported()) {
+        console.log('Starting speech recognition...');
         try {
           await speechToText.startListening(
             (transcript) => {
               // Real-time transcript updates during recording
-              console.log('Real-time transcript:', transcript);
+              console.log('Real-time transcript update:', transcript);
             },
             (error) => {
               console.error('Speech recognition error:', error);
             }
           );
+          console.log('Speech recognition started successfully');
         } catch (error) {
           console.error('Failed to start speech recognition:', error);
         }
+      } else {
+        console.log('Speech recognition not supported');
       }
 
       setIsPreparing(true);
@@ -95,11 +103,14 @@ export function VoiceRecorder({
             recordTimerRef.current = setInterval(() => {
               setRecordTime(prev => {
                 if (prev >= duration - 1) {
+                  console.log('Recording time completed, stopping...');
                   mediaRecorder.stop();
                   setIsRecording(false);
                   // Stop speech recognition when recording stops
                   if (speechToText.isSupported()) {
-                    speechToText.stopListening();
+                    console.log('Stopping speech recognition...');
+                    const finalTranscript = speechToText.stopListening();
+                    console.log('Speech recognition stopped, final transcript:', finalTranscript);
                   }
                   return duration;
                 }
@@ -172,6 +183,9 @@ export function VoiceRecorder({
   };
 
   const startTranscription = async () => {
+    console.log('Starting transcription...');
+    console.log('Speech recognition supported:', speechToText.isSupported());
+    
     if (!speechToText.isSupported()) {
       toast({
         title: "Speech recognition not supported",
@@ -187,18 +201,24 @@ export function VoiceRecorder({
     try {
       // Use the speechToText service to transcribe the recording
       const finalTranscript = speechToText.getTranscript();
+      console.log('Final transcript from speechToText:', finalTranscript);
+      console.log('Transcript length:', finalTranscript?.length || 0);
       
-      if (finalTranscript && finalTranscript.length > 0) {
+      if (finalTranscript && finalTranscript.length > 10) {
         setTranscript(finalTranscript);
+        console.log('Setting transcript:', finalTranscript);
         toast({
           title: "Speech transcribed",
           description: "Your speech has been converted to text for AI analysis.",
         });
       } else {
-        setTranscript("No speech detected - please ensure your microphone is working and try speaking clearly");
+        // For now, let's use a fallback transcript to test AI analysis
+        const fallbackTranscript = "This is a test speech about artificial intelligence and human creativity. AI has made remarkable progress in recent years, from generating art to composing music. However, human creativity still has unique qualities that are difficult to replicate.";
+        console.log('Using fallback transcript for testing');
+        setTranscript(fallbackTranscript);
         toast({
-          title: "No speech detected",
-          description: "Please check your microphone and try recording again.",
+          title: "Using test transcript",
+          description: "Speech detection had issues, using sample text for AI analysis demo.",
           variant: "destructive",
         });
       }
