@@ -64,6 +64,23 @@ export function VoiceRecorder({
         await startTranscription();
       };
 
+      // Start speech recognition when we start preparation
+      if (speechToText.isSupported()) {
+        try {
+          await speechToText.startListening(
+            (transcript) => {
+              // Real-time transcript updates during recording
+              console.log('Real-time transcript:', transcript);
+            },
+            (error) => {
+              console.error('Speech recognition error:', error);
+            }
+          );
+        } catch (error) {
+          console.error('Failed to start speech recognition:', error);
+        }
+      }
+
       setIsPreparing(true);
       setPrepTime(10);
 
@@ -80,6 +97,10 @@ export function VoiceRecorder({
                 if (prev >= duration - 1) {
                   mediaRecorder.stop();
                   setIsRecording(false);
+                  // Stop speech recognition when recording stops
+                  if (speechToText.isSupported()) {
+                    speechToText.stopListening();
+                  }
                   return duration;
                 }
                 return prev + 1;
@@ -94,6 +115,11 @@ export function VoiceRecorder({
       }, 1000);
     } catch (error) {
       console.error('Error accessing microphone:', error);
+      toast({
+        title: "Microphone access denied",
+        description: "Please allow microphone access to record your speech.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -102,17 +128,30 @@ export function VoiceRecorder({
       mediaRecorderRef.current.stop();
       setIsRecording(false);
       if (recordTimerRef.current) clearInterval(recordTimerRef.current);
+      // Stop speech recognition when manually stopping
+      if (speechToText.isSupported()) {
+        speechToText.stopListening();
+      }
     }
   };
 
-  const playAudio = () => {
+  const playAudio = async () => {
     if (audioRef.current) {
-      if (isPlaying) {
-        audioRef.current.pause();
-        setIsPlaying(false);
-      } else {
-        audioRef.current.play();
-        setIsPlaying(true);
+      try {
+        if (isPlaying) {
+          audioRef.current.pause();
+          setIsPlaying(false);
+        } else {
+          await audioRef.current.play();
+          setIsPlaying(true);
+        }
+      } catch (error) {
+        console.error('Audio play failed:', error);
+        toast({
+          title: "Audio playback failed",
+          description: "Could not play the recorded audio.",
+          variant: "destructive",
+        });
       }
     }
   };
@@ -136,25 +175,36 @@ export function VoiceRecorder({
     if (!speechToText.isSupported()) {
       toast({
         title: "Speech recognition not supported",
-        description: "Your browser doesn't support speech recognition. Using manual transcription.",
+        description: "Your browser doesn't support speech recognition. Analysis will use recorded audio only.",
         variant: "destructive",
       });
+      setTranscript("Speech recognition not available - using audio recording for analysis");
       return;
     }
 
     setIsTranscribing(true);
     
     try {
-      // Note: For real-time transcription during recording, we'd need to start this during recording
-      // For now, we'll just indicate that transcription would happen here
-      setTranscript("Transcription would be generated here in real implementation");
+      // Use the speechToText service to transcribe the recording
+      const finalTranscript = speechToText.getTranscript();
       
-      toast({
-        title: "Speech transcribed",
-        description: "Your speech has been converted to text for AI analysis.",
-      });
+      if (finalTranscript && finalTranscript.length > 0) {
+        setTranscript(finalTranscript);
+        toast({
+          title: "Speech transcribed",
+          description: "Your speech has been converted to text for AI analysis.",
+        });
+      } else {
+        setTranscript("No speech detected - please ensure your microphone is working and try speaking clearly");
+        toast({
+          title: "No speech detected",
+          description: "Please check your microphone and try recording again.",
+          variant: "destructive",
+        });
+      }
     } catch (error) {
       console.error('Transcription failed:', error);
+      setTranscript("Transcription failed - analysis will use basic audio characteristics");
       toast({
         title: "Transcription failed",
         description: "Could not transcribe your speech. AI analysis may be limited.",
