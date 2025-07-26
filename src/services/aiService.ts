@@ -27,32 +27,31 @@ export class AIService {
 
   async analyzeSpeeches(request: SpeechAnalysisRequest): Promise<ScoreResult> {
     if (!this.apiKey) {
-      throw new Error('API key not set. Please provide your OpenAI API key.');
+      throw new Error('API key not set. Please provide your Google Gemini API key.');
     }
 
     const prompt = this.buildAnalysisPrompt(request);
 
     try {
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${this.apiKey}`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${this.apiKey}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'gpt-4.1-2025-04-14',
-          messages: [
+          contents: [
             {
-              role: 'system',
-              content: 'You are an expert debate coach and public speaking instructor. Analyze speeches and provide constructive feedback to help improve debating skills.'
-            },
-            {
-              role: 'user',
-              content: prompt
+              parts: [
+                {
+                  text: `You are an expert debate coach and public speaking instructor. Analyze speeches and provide constructive feedback to help improve debating skills.\n\n${prompt}`
+                }
+              ]
             }
           ],
-          temperature: 0.7,
-          max_tokens: 2000,
+          generationConfig: {
+            temperature: 0.7,
+            maxOutputTokens: 2000,
+          }
         }),
       });
 
@@ -61,7 +60,7 @@ export class AIService {
       }
 
       const data = await response.json();
-      const analysis = data.choices[0].message.content;
+      const analysis = data.candidates[0].content.parts[0].text;
 
       return this.parseAnalysis(analysis, request.transcript);
     } catch (error) {

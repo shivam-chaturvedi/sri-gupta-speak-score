@@ -22,8 +22,8 @@ export const ApiKeyModal = ({ isOpen, onApiKeySet, onClose }: ApiKeyModalProps) 
       return;
     }
     
-    if (!apiKey.startsWith("sk-")) {
-      setError("Invalid API key format. OpenAI API keys start with 'sk-'");
+    if (!apiKey.startsWith("AIza")) {
+      setError("Invalid API key format. Gemini API keys start with 'AIza'");
       return;
     }
 
@@ -40,18 +40,18 @@ export const ApiKeyModal = ({ isOpen, onApiKeySet, onClose }: ApiKeyModalProps) 
           </div>
           <CardTitle className="text-2xl font-bold text-foreground">Enable AI Analysis</CardTitle>
           <p className="text-muted-foreground mt-2">
-            To get real-time AI feedback on your speeches, please provide your OpenAI API key.
+            To get real-time AI feedback on your speeches, please provide your Google Gemini API key.
           </p>
         </CardHeader>
         
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <label className="text-sm font-medium text-foreground">OpenAI API Key</label>
+            <label className="text-sm font-medium text-foreground">Google Gemini API Key</label>
             <div className="relative">
               <Lock className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
               <Input
                 type="password"
-                placeholder="sk-..."
+                placeholder="AIza..."
                 value={apiKey}
                 onChange={(e) => {
                   setApiKey(e.target.value);
@@ -71,7 +71,7 @@ export const ApiKeyModal = ({ isOpen, onApiKeySet, onClose }: ApiKeyModalProps) 
             <ul className="space-y-1">
               <li>• Stored locally in your browser</li>
               <li>• Never sent to our servers</li>
-              <li>• Only used for OpenAI API calls</li>
+              <li>• Only used for Google Gemini API calls</li>
             </ul>
           </div>
 
@@ -87,12 +87,12 @@ export const ApiKeyModal = ({ isOpen, onApiKeySet, onClose }: ApiKeyModalProps) 
           <p className="text-xs text-muted-foreground text-center">
             Don't have an API key?{" "}
             <a
-              href="https://platform.openai.com/api-keys"
+              href="https://aistudio.google.com/app/apikey"
               target="_blank"
               rel="noopener noreferrer"
               className="text-primary hover:underline"
             >
-              Get one from OpenAI
+              Get one from Google AI Studio
             </a>
           </p>
         </CardContent>
