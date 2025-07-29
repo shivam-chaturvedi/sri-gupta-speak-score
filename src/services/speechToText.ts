@@ -44,6 +44,7 @@ export class SpeechToTextService {
   private recognition: SpeechRecognition | null = null;
   private isListening = false;
   private transcript = '';
+  private interimTranscript = '';
   private onResult: ((transcript: string) => void) | null = null;
   private onError: ((error: string) => void) | null = null;
 
@@ -66,18 +67,28 @@ export class SpeechToTextService {
 
     this.recognition.onresult = (event) => {
       let finalTranscript = '';
+      let interimTranscript = '';
       
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const transcript = event.results[i][0].transcript;
         if (event.results[i].isFinal) {
           finalTranscript += transcript + ' ';
+        } else {
+          interimTranscript += transcript;
         }
       }
 
       if (finalTranscript) {
         this.transcript += finalTranscript;
-        this.onResult?.(this.transcript.trim());
+        console.log('Final transcript added:', finalTranscript);
+        console.log('Total transcript now:', this.transcript);
       }
+      
+      this.interimTranscript = interimTranscript;
+      
+      // Always call onResult with current transcript + interim
+      const currentResult = (this.transcript + ' ' + interimTranscript).trim();
+      this.onResult?.(currentResult);
     };
 
     this.recognition.onerror = (event) => {

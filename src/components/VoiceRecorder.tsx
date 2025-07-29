@@ -76,9 +76,16 @@ export function VoiceRecorder({
             (transcript) => {
               // Real-time transcript updates during recording
               console.log('Real-time transcript update:', transcript);
+              // Update transcript in real-time so user can see progress
+              setTranscript(transcript);
             },
             (error) => {
               console.error('Speech recognition error:', error);
+              toast({
+                title: "Speech recognition error",
+                description: error,
+                variant: "destructive",
+              });
             }
           );
           console.log('Speech recognition started successfully');
