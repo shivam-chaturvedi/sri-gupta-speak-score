@@ -44,21 +44,38 @@ export function VoiceRecorder({
     try {
       console.log('Requesting microphone access...');
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      console.log('Microphone access granted');
+      console.log('Microphone access granted, stream active:', stream.active);
       
       const mediaRecorder = new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
+      console.log('MediaRecorder created, state:', mediaRecorder.state);
 
       const chunks: Blob[] = [];
       mediaRecorder.ondataavailable = (e) => {
+        console.log('MediaRecorder data available, size:', e.data.size);
         if (e.data.size > 0) {
           chunks.push(e.data);
         }
       };
 
+      mediaRecorder.onstart = () => {
+        console.log('MediaRecorder started successfully');
+      };
+
       mediaRecorder.onstop = async () => {
-        console.log('Recording stopped, creating blob...');
+        console.log('MediaRecorder stopped, chunks collected:', chunks.length);
+        if (chunks.length === 0) {
+          console.error('No audio data was recorded!');
+          toast({
+            title: "Recording failed",
+            description: "No audio data was captured. Please try again.",
+            variant: "destructive",
+          });
+          return;
+        }
+        
         const blob = new Blob(chunks, { type: 'audio/webm' });
+        console.log('Audio blob created, size:', blob.size);
         setAudioBlob(blob);
         setAudioUrl(URL.createObjectURL(blob));
         setIsCompleted(true);
