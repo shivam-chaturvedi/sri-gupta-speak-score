@@ -1,6 +1,18 @@
 interface ScoreResult {
-  score: number;
-  feedback: string[];
+  score: {
+    logic: number;
+    rhetoric: number;
+    empathy: number;
+    delivery: number;
+    total: number;
+  };
+  feedback: {
+    logic: string;
+    rhetoric: string;
+    empathy: string;
+    delivery: string;
+    overall: string;
+  };
   missingPoints: string[];
   enhancedArgument: string;
   transcript: string;
@@ -117,18 +129,27 @@ Be constructive and specific in feedback. Focus on actionable improvements.
 
       const parsed = JSON.parse(jsonMatch[0]);
 
-      const totalScore = parsed.logic_score + parsed.rhetoric_score + parsed.empathy_score + parsed.delivery_score;
-
-      const allFeedback = [
-        ...parsed.logic_feedback,
-        ...parsed.rhetoric_feedback,
-        ...parsed.empathy_feedback,
-        ...parsed.delivery_feedback
-      ];
+      const logicScore = parsed.logic_score || 0;
+      const rhetoricScore = parsed.rhetoric_score || 0;
+      const empathyScore = parsed.empathy_score || 0;
+      const deliveryScore = parsed.delivery_score || 0;
+      const totalScore = logicScore + rhetoricScore + empathyScore + deliveryScore;
 
       return {
-        score: totalScore,
-        feedback: allFeedback,
+        score: {
+          logic: logicScore,
+          rhetoric: rhetoricScore,
+          empathy: empathyScore,
+          delivery: deliveryScore,
+          total: totalScore
+        },
+        feedback: {
+          logic: Array.isArray(parsed.logic_feedback) ? parsed.logic_feedback.join(' ') : 'No logic feedback provided.',
+          rhetoric: Array.isArray(parsed.rhetoric_feedback) ? parsed.rhetoric_feedback.join(' ') : 'No rhetoric feedback provided.',
+          empathy: Array.isArray(parsed.empathy_feedback) ? parsed.empathy_feedback.join(' ') : 'No empathy feedback provided.',
+          delivery: Array.isArray(parsed.delivery_feedback) ? parsed.delivery_feedback.join(' ') : 'No delivery feedback provided.',
+          overall: `Your speech scored ${totalScore}/30. Focus on improving areas with lower scores for better performance.`
+        },
         missingPoints: parsed.missing_points || [],
         enhancedArgument: parsed.enhanced_argument || '',
         transcript: originalTranscript
