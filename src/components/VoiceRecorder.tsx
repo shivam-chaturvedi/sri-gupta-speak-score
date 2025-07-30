@@ -223,7 +223,7 @@ export function VoiceRecorder({
     setIsTranscribing(true);
     
     try {
-      // Use the speechToText service to transcribe the recording
+      // Use the speechToText service to get the final transcript
       const finalTranscript = speechToText.getTranscript();
       console.log('Final transcript from speechToText:', finalTranscript);
       console.log('Transcript length:', finalTranscript?.length || 0);
@@ -236,19 +236,15 @@ export function VoiceRecorder({
           description: "Your speech has been converted to text for AI analysis.",
         });
       } else {
-        // For now, let's use a fallback transcript to test AI analysis
-        const fallbackTranscript = "This is a test speech about artificial intelligence and human creativity. AI has made remarkable progress in recent years, from generating art to composing music. However, human creativity still has unique qualities that are difficult to replicate.";
-        console.log('Using fallback transcript for testing');
-        setTranscript(fallbackTranscript);
+        console.log('No valid transcript, speech recognition may have failed');
         toast({
-          title: "Using test transcript",
-          description: "Speech detection had issues, using sample text for AI analysis demo.",
+          title: "Speech recognition incomplete",
+          description: "Speech detection had issues. Please try speaking more clearly.",
           variant: "destructive",
         });
       }
     } catch (error) {
       console.error('Transcription failed:', error);
-      setTranscript("Transcription failed - analysis will use basic audio characteristics");
       toast({
         title: "Transcription failed",
         description: "Could not transcribe your speech. AI analysis may be limited.",
