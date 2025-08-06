@@ -26,11 +26,10 @@ interface SpeechAnalysisRequest {
 }
 
 export class AIService {
-  private apiKey: string | null = null;
+  private apiKey: string = "AIzaSyCsUkpLciG1gmhnHQnxm6hTiBOvXOdvEA4";
 
   constructor() {
-    // For now, we'll ask the user for their API key
-    this.apiKey = null;
+    // API key is hardcoded
   }
 
   setApiKey(key: string) {

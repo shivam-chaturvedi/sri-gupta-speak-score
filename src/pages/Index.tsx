@@ -42,18 +42,10 @@ const Index = () => {
     
     setSessionData({ ...sessionData, audioBlob });
     
-    // Check if we have an API key for AI analysis
-    const apiKey = localStorage.getItem('openai_api_key');
-    
-    if (!apiKey && transcript) {
-      setShowApiKeyModal(true);
-      return;
-    }
-    
-    if (apiKey && transcript) {
+    // AI analysis with hardcoded API key
+    if (transcript) {
       setIsAnalyzing(true);
       try {
-        aiService.setApiKey(apiKey);
         const results = await aiService.analyzeSpeeches({
           transcript,
           topic: sessionData.motion.topic,
@@ -66,7 +58,7 @@ const Index = () => {
         console.error('AI analysis failed:', error);
         toast({
           title: "AI Analysis Failed",
-          description: "Falling back to demo mode. Check your API key or try again.",
+          description: "Falling back to demo mode. Please try again.",
           variant: "destructive",
         });
         
@@ -78,7 +70,7 @@ const Index = () => {
         setIsAnalyzing(false);
       }
     } else {
-      // Fallback to mock scoring if no transcript or API key
+      // Fallback to mock scoring if no transcript
       const results = generateMockScore(audioBlob, sessionData.motion.topic, sessionData.stance);
       setScoreData(results);
       setCurrentState("results");
