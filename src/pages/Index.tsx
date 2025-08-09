@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Mic, Target, Trophy, Zap, Heart, Sparkles, Loader2 } from "lucide-react";
+import { Mic, Target, Trophy, Zap, Heart, Sparkles, Loader2, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { MotionCard } from "@/components/MotionCard";
@@ -10,6 +10,8 @@ import { getDailyMotion, getRandomMotions, type Motion } from "@/data/motions";
 import { generateMockScore } from "@/utils/mockScoring";
 import { aiService } from "@/services/aiService";
 import { toast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
+import { Link } from "react-router-dom";
 
 type AppState = "home" | "recording" | "results";
 
@@ -21,6 +23,7 @@ interface SessionData {
 }
 
 const Index = () => {
+  const { user, signOut } = useAuth();
   const [currentState, setCurrentState] = useState<AppState>("home");
   const [sessionData, setSessionData] = useState<SessionData | null>(null);
   const [scoreData, setScoreData] = useState<any>(null);
@@ -144,6 +147,35 @@ const Index = () => {
       {/* Hero Section */}
       <div className="relative overflow-hidden bg-gradient-hero text-white">
         <div className="absolute inset-0 bg-black/20"></div>
+        
+        {/* User Menu */}
+        <div className="absolute top-6 right-6 z-10">
+          {user ? (
+            <div className="flex items-center gap-4">
+              <span className="text-white/80 text-sm">Welcome, {user.email}</span>
+              <Button
+                onClick={signOut}
+                variant="ghost"
+                size="sm"
+                className="text-white/80 hover:text-white hover:bg-white/20"
+              >
+                Sign Out
+              </Button>
+            </div>
+          ) : (
+            <Link to="/login">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-white/80 hover:text-white hover:bg-white/20 flex items-center gap-2"
+              >
+                <User className="w-4 h-4" />
+                Sign In
+              </Button>
+            </Link>
+          )}
+        </div>
+        
         <div className="relative max-w-4xl mx-auto px-4 py-16 text-center">
           <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm rounded-full px-4 py-2 mb-6">
             <Sparkles className="w-4 h-4" />
