@@ -153,6 +153,16 @@ const Index = () => {
           {user ? (
             <div className="flex items-center gap-4">
               <span className="text-white/80 text-sm">Welcome, {user.email}</span>
+              <Link to="/progress">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-white/80 hover:text-white hover:bg-white/20 flex items-center gap-2"
+                >
+                  <Trophy className="w-4 h-4" />
+                  Progress
+                </Button>
+              </Link>
               <Button
                 onClick={signOut}
                 variant="ghost"
