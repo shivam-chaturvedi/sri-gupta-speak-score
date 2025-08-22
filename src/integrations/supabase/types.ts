@@ -14,6 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
+      achievement_badges: {
+        Row: {
+          achievement_criteria: Json
+          badge_description: string
+          badge_id: string
+          badge_name: string
+          badge_tier: string
+          created_at: string
+          icon_name: string
+          points_value: number
+        }
+        Insert: {
+          achievement_criteria: Json
+          badge_description: string
+          badge_id?: string
+          badge_name: string
+          badge_tier: string
+          created_at?: string
+          icon_name: string
+          points_value?: number
+        }
+        Update: {
+          achievement_criteria?: Json
+          badge_description?: string
+          badge_id?: string
+          badge_name?: string
+          badge_tier?: string
+          created_at?: string
+          icon_name?: string
+          points_value?: number
+        }
+        Relationships: []
+      }
       debate_sessions: {
         Row: {
           created_at: string
@@ -84,6 +117,115 @@ export type Database = {
           created_at?: string
           display_name?: string | null
           id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      session_feedback: {
+        Row: {
+          created_at: string
+          feedback_id: string
+          improvement_goals: string | null
+          reflection_notes: string | null
+          self_rating: number | null
+          session_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          feedback_id?: string
+          improvement_goals?: string | null
+          reflection_notes?: string | null
+          self_rating?: number | null
+          session_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          feedback_id?: string
+          improvement_goals?: string | null
+          reflection_notes?: string | null
+          self_rating?: number | null
+          session_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "session_feedback_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "debate_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_achievement_badges: {
+        Row: {
+          badge_id: string
+          earned_at: string
+          progress_percentage: number
+          user_badge_id: string
+          user_id: string
+        }
+        Insert: {
+          badge_id: string
+          earned_at?: string
+          progress_percentage?: number
+          user_badge_id?: string
+          user_id: string
+        }
+        Update: {
+          badge_id?: string
+          earned_at?: string
+          progress_percentage?: number
+          user_badge_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_achievement_badges_badge_id_fkey"
+            columns: ["badge_id"]
+            isOneToOne: false
+            referencedRelation: "achievement_badges"
+            referencedColumns: ["badge_id"]
+          },
+        ]
+      }
+      user_progress: {
+        Row: {
+          created_at: string
+          current_level: number
+          current_streak: number
+          last_activity_date: string | null
+          longest_streak: number
+          progress_id: string
+          total_points: number
+          total_time_spent: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          current_level?: number
+          current_streak?: number
+          last_activity_date?: string | null
+          longest_streak?: number
+          progress_id?: string
+          total_points?: number
+          total_time_spent?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          current_level?: number
+          current_streak?: number
+          last_activity_date?: string | null
+          longest_streak?: number
+          progress_id?: string
+          total_points?: number
+          total_time_spent?: number
           updated_at?: string
           user_id?: string
         }
