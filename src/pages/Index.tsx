@@ -7,7 +7,7 @@ import { MotionCard } from "@/components/MotionCard";
 import { VoiceRecorder } from "@/components/VoiceRecorder";
 import { ScoreDisplay } from "@/components/ScoreDisplay";
 import { ApiKeyModal } from "@/components/ApiKeyModal";
-import { getDailyMotion, getRandomMotions, type Motion } from "@/data/motions";
+import { getDailyMotion, getRandomMotions, motions as allMotionsData, type Motion } from "@/data/motions";
 import { generateMockScore } from "@/utils/mockScoring";
 import { aiService } from "@/services/aiService";
 import { toast } from "@/hooks/use-toast";
@@ -37,8 +37,8 @@ const Index = () => {
     return [daily, ...random];
   });
 
-  // Extract unique themes from motions data and sort alphabetically
-  const allThemes = Array.from(new Set(motions.map(motion => motion.category))).sort();
+  // Extract unique themes from ALL motions data and sort alphabetically
+  const allThemes = Array.from(new Set(allMotionsData.map(motion => motion.category))).sort();
   const themeOptions = ["All Themes", ...allThemes];
 
   // Filter motions based on selected theme
