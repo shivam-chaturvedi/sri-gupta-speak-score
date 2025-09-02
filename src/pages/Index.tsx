@@ -44,7 +44,10 @@ const Index = () => {
   // Filter motions based on selected theme
   const filteredMotions = selectedTheme === "All Themes" 
     ? motions 
-    : motions.filter(motion => motion.category === selectedTheme);
+    : allMotionsData.filter(motion => motion.category === selectedTheme);
+  
+  // Get daily motion for theme-specific filtering
+  const dailyMotion = motions[0];
 
   const handleStartSpeech = (motion: Motion, duration: number, stance?: string) => {
     setSessionData({ motion, duration, stance });
@@ -275,14 +278,14 @@ const Index = () => {
         </div>
 
         {/* Daily Motion Highlight */}
-        {(selectedTheme === "All Themes" || filteredMotions.includes(motions[0])) && (
+        {(selectedTheme === "All Themes" || dailyMotion.category === selectedTheme) && (
           <div className="mb-8">
             <div className="flex items-center gap-2 mb-4">
               <div className="w-3 h-3 bg-gradient-primary rounded-full animate-pulse"></div>
               <h3 className="text-xl font-semibold text-foreground">Today's Featured Topic</h3>
             </div>
             <MotionCard 
-              motion={motions[0]} 
+              motion={dailyMotion} 
               onStartSpeech={handleStartSpeech}
             />
           </div>
@@ -294,7 +297,10 @@ const Index = () => {
             {selectedTheme === "All Themes" ? "More Topics" : `${selectedTheme} Topics`}
           </h3>
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-2">
-            {(selectedTheme === "All Themes" ? motions.slice(1) : filteredMotions.filter(motion => motion.id !== motions[0].id)).map((motion) => (
+            {(selectedTheme === "All Themes" 
+              ? motions.slice(1) 
+              : filteredMotions.filter(motion => motion.id !== dailyMotion.id)
+            ).map((motion) => (
               <MotionCard 
                 key={motion.id} 
                 motion={motion} 
