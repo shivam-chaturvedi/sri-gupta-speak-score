@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Mic, Target, Trophy, Zap, Heart, Sparkles, Loader2, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MotionCard } from "@/components/MotionCard";
 import { VoiceRecorder } from "@/components/VoiceRecorder";
 import { ScoreDisplay } from "@/components/ScoreDisplay";
@@ -29,11 +30,21 @@ const Index = () => {
   const [scoreData, setScoreData] = useState<any>(null);
   const [showApiKeyModal, setShowApiKeyModal] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [selectedTheme, setSelectedTheme] = useState<string>("All Themes");
   const [motions, setMotions] = useState(() => {
     const daily = getDailyMotion();
     const random = getRandomMotions(2);
     return [daily, ...random];
   });
+
+  // Extract unique themes from motions data and sort alphabetically
+  const allThemes = Array.from(new Set(motions.map(motion => motion.category))).sort();
+  const themeOptions = ["All Themes", ...allThemes];
+
+  // Filter motions based on selected theme
+  const filteredMotions = selectedTheme === "All Themes" 
+    ? motions 
+    : motions.filter(motion => motion.category === selectedTheme);
 
   const handleStartSpeech = (motion: Motion, duration: number, stance?: string) => {
     setSessionData({ motion, duration, stance });
@@ -237,23 +248,53 @@ const Index = () => {
           </p>
         </div>
 
-        {/* Daily Motion Highlight */}
+        {/* Theme Filter */}
         <div className="mb-8">
-          <div className="flex items-center gap-2 mb-4">
-            <div className="w-3 h-3 bg-gradient-primary rounded-full animate-pulse"></div>
-            <h3 className="text-xl font-semibold text-foreground">Today's Featured Topic</h3>
+          <div className="flex items-center gap-4 mb-6">
+            <label htmlFor="theme-filter" className="text-lg font-medium text-foreground">
+              Filter by Theme:
+            </label>
+            <Select value={selectedTheme} onValueChange={setSelectedTheme}>
+              <SelectTrigger className="w-48">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {themeOptions.map((theme) => (
+                  <SelectItem key={theme} value={theme}>
+                    {theme}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {selectedTheme !== "All Themes" && (
+              <span className="text-sm text-muted-foreground">
+                ({filteredMotions.length} topic{filteredMotions.length !== 1 ? 's' : ''} found)
+              </span>
+            )}
           </div>
-          <MotionCard 
-            motion={motions[0]} 
-            onStartSpeech={handleStartSpeech}
-          />
         </div>
+
+        {/* Daily Motion Highlight */}
+        {(selectedTheme === "All Themes" || filteredMotions.includes(motions[0])) && (
+          <div className="mb-8">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-3 h-3 bg-gradient-primary rounded-full animate-pulse"></div>
+              <h3 className="text-xl font-semibold text-foreground">Today's Featured Topic</h3>
+            </div>
+            <MotionCard 
+              motion={motions[0]} 
+              onStartSpeech={handleStartSpeech}
+            />
+          </div>
+        )}
 
         {/* More Topics */}
         <div className="mb-8">
-          <h3 className="text-xl font-semibold text-foreground mb-4">More Topics</h3>
+          <h3 className="text-xl font-semibold text-foreground mb-4">
+            {selectedTheme === "All Themes" ? "More Topics" : `${selectedTheme} Topics`}
+          </h3>
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-2">
-            {motions.slice(1).map((motion) => (
+            {(selectedTheme === "All Themes" ? motions.slice(1) : filteredMotions.filter(motion => motion.id !== motions[0].id)).map((motion) => (
               <MotionCard 
                 key={motion.id} 
                 motion={motion} 
@@ -270,6 +311,7 @@ const Index = () => {
               const daily = getDailyMotion();
               const random = getRandomMotions(2);
               setMotions([daily, ...random]);
+              setSelectedTheme("All Themes");
             }}
             variant="outline"
             className="font-medium"
