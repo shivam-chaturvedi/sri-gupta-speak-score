@@ -149,6 +149,7 @@ const Index = () => {
           transcript={scoreData.transcript}
           missingPoints={scoreData.missingPoints}
           enhancedArgument={scoreData.enhancedArgument}
+          enhancedFeedback={scoreData.enhancedFeedback}
           onTryAgain={handleTryAgain}
           onNewTopic={handleNewTopic}
         />

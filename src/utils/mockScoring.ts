@@ -14,12 +14,45 @@ interface Feedback {
   overall: string;
 }
 
+interface CounterArgument {
+  rebuttal: string;
+  strengthLevel: 'Low' | 'Medium' | 'High';
+  supportingEvidence: string;
+  commonSources: string;
+}
+
+interface DefenseStrategy {
+  preemptiveDefense: string;
+  directResponse: string;
+  redirectTechnique: string;
+  evidenceArsenal: string;
+}
+
+interface EnhancedFeedback {
+  argumentAnalysis: {
+    logicalStructure: string;
+    evidenceQuality: string;
+    clarityScore: number;
+    persuasiveness: string;
+  };
+  dataEnhancements: {
+    statisticalSupport: string[];
+    expertCitations: string[];
+    caseStudies: string[];
+    quantifiableClaims: string[];
+  };
+  counterArguments: CounterArgument[];
+  defenseStrategies: DefenseStrategy[];
+  strategicRecommendations: string[];
+}
+
 export interface ScoreData {
   score: Score;
   feedback: Feedback;
   transcript: string;
   missingPoints: string[];
   enhancedArgument: string;
+  enhancedFeedback?: EnhancedFeedback;
 }
 
 // Mock scoring system for MVP - will be replaced with AI scoring

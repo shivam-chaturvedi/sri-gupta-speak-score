@@ -1,10 +1,42 @@
-import { Trophy, Target, Heart, Zap, RotateCcw, Share2, MessageSquare, Lightbulb, Star } from "lucide-react";
+import { Trophy, Target, Heart, Zap, RotateCcw, Share2, MessageSquare, Lightbulb, Star, Shield, TrendingUp, Users, Brain, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { type ScoreData } from "@/utils/mockScoring";
+
+interface CounterArgument {
+  rebuttal: string;
+  strengthLevel: 'Low' | 'Medium' | 'High';
+  supportingEvidence: string;
+  commonSources: string;
+}
+
+interface DefenseStrategy {
+  preemptiveDefense: string;
+  directResponse: string;
+  redirectTechnique: string;
+  evidenceArsenal: string;
+}
+
+interface EnhancedFeedback {
+  argumentAnalysis: {
+    logicalStructure: string;
+    evidenceQuality: string;
+    clarityScore: number;
+    persuasiveness: string;
+  };
+  dataEnhancements: {
+    statisticalSupport: string[];
+    expertCitations: string[];
+    caseStudies: string[];
+    quantifiableClaims: string[];
+  };
+  counterArguments: CounterArgument[];
+  defenseStrategies: DefenseStrategy[];
+  strategicRecommendations: string[];
+}
 
 interface ScoreDisplayProps {
   motion: {
@@ -17,6 +49,7 @@ interface ScoreDisplayProps {
   transcript: string;
   missingPoints: string[];
   enhancedArgument: string;
+  enhancedFeedback?: EnhancedFeedback;
   onTryAgain: () => void;
   onNewTopic: () => void;
 }
@@ -29,6 +62,7 @@ export function ScoreDisplay({
   transcript,
   missingPoints,
   enhancedArgument,
+  enhancedFeedback,
   onTryAgain, 
   onNewTopic 
 }: ScoreDisplayProps) {
@@ -161,18 +195,30 @@ export function ScoreDisplay({
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="transcript" className="w-full">
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="transcript" className="flex items-center gap-2">
-                <MessageSquare className="w-4 h-4" />
-                Your Argument
+            <TabsList className="grid w-full grid-cols-6">
+              <TabsTrigger value="transcript" className="flex items-center gap-1 text-xs">
+                <MessageSquare className="w-3 h-3" />
+                Speech
               </TabsTrigger>
-              <TabsTrigger value="missing" className="flex items-center gap-2">
-                <Lightbulb className="w-4 h-4" />
-                What You Missed
+              <TabsTrigger value="missing" className="flex items-center gap-1 text-xs">
+                <Lightbulb className="w-3 h-3" />
+                Missing
               </TabsTrigger>
-              <TabsTrigger value="enhanced" className="flex items-center gap-2">
-                <Star className="w-4 h-4" />
-                Enhanced Version
+              <TabsTrigger value="enhanced" className="flex items-center gap-1 text-xs">
+                <Star className="w-3 h-3" />
+                Enhanced
+              </TabsTrigger>
+              <TabsTrigger value="analysis" className="flex items-center gap-1 text-xs">
+                <Brain className="w-3 h-3" />
+                Analysis
+              </TabsTrigger>
+              <TabsTrigger value="counterargs" className="flex items-center gap-1 text-xs">
+                <AlertTriangle className="w-3 h-3" />
+                Counters
+              </TabsTrigger>
+              <TabsTrigger value="defense" className="flex items-center gap-1 text-xs">
+                <Shield className="w-3 h-3" />
+                Defense
               </TabsTrigger>
             </TabsList>
             
@@ -215,6 +261,184 @@ export function ScoreDisplay({
                 </div>
               </div>
             </TabsContent>
+
+            {enhancedFeedback && (
+              <>
+                <TabsContent value="analysis" className="mt-4">
+                  <div className="prose prose-sm max-w-none space-y-6">
+                    <div>
+                      <h4 className="text-foreground font-semibold mb-3 flex items-center gap-2">
+                        <Brain className="w-5 h-5 text-primary" />
+                        🎯 Argument Analysis
+                      </h4>
+                      <div className="space-y-4">
+                        <div>
+                          <h5 className="font-medium text-foreground mb-2">Logical Structure</h5>
+                          <p className="text-muted-foreground">{enhancedFeedback.argumentAnalysis.logicalStructure}</p>
+                        </div>
+                        <div>
+                          <h5 className="font-medium text-foreground mb-2">Evidence Quality</h5>
+                          <p className="text-muted-foreground">{enhancedFeedback.argumentAnalysis.evidenceQuality}</p>
+                        </div>
+                        <div>
+                          <h5 className="font-medium text-foreground mb-2">Clarity Score: {enhancedFeedback.argumentAnalysis.clarityScore}/10</h5>
+                          <Progress value={enhancedFeedback.argumentAnalysis.clarityScore * 10} className="w-full mb-2" />
+                        </div>
+                        <div>
+                          <h5 className="font-medium text-foreground mb-2">Persuasiveness</h5>
+                          <p className="text-muted-foreground">{enhancedFeedback.argumentAnalysis.persuasiveness}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <h4 className="text-foreground font-semibold mb-3 flex items-center gap-2">
+                        <TrendingUp className="w-5 h-5 text-primary" />
+                        📊 Data Enhancement Opportunities
+                      </h4>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        {enhancedFeedback.dataEnhancements.statisticalSupport.length > 0 && (
+                          <div>
+                            <h5 className="font-medium text-foreground mb-2">Statistical Support</h5>
+                            <ul className="space-y-1">
+                              {enhancedFeedback.dataEnhancements.statisticalSupport.map((stat, i) => (
+                                <li key={i} className="text-sm text-muted-foreground flex items-start gap-2">
+                                  <div className="w-1.5 h-1.5 bg-primary rounded-full mt-2 flex-shrink-0" />
+                                  {stat}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        {enhancedFeedback.dataEnhancements.expertCitations.length > 0 && (
+                          <div>
+                            <h5 className="font-medium text-foreground mb-2">Expert Citations</h5>
+                            <ul className="space-y-1">
+                              {enhancedFeedback.dataEnhancements.expertCitations.map((citation, i) => (
+                                <li key={i} className="text-sm text-muted-foreground flex items-start gap-2">
+                                  <div className="w-1.5 h-1.5 bg-primary rounded-full mt-2 flex-shrink-0" />
+                                  {citation}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        {enhancedFeedback.dataEnhancements.caseStudies.length > 0 && (
+                          <div>
+                            <h5 className="font-medium text-foreground mb-2">Case Studies</h5>
+                            <ul className="space-y-1">
+                              {enhancedFeedback.dataEnhancements.caseStudies.map((study, i) => (
+                                <li key={i} className="text-sm text-muted-foreground flex items-start gap-2">
+                                  <div className="w-1.5 h-1.5 bg-primary rounded-full mt-2 flex-shrink-0" />
+                                  {study}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        {enhancedFeedback.dataEnhancements.quantifiableClaims.length > 0 && (
+                          <div>
+                            <h5 className="font-medium text-foreground mb-2">Quantifiable Claims</h5>
+                            <ul className="space-y-1">
+                              {enhancedFeedback.dataEnhancements.quantifiableClaims.map((claim, i) => (
+                                <li key={i} className="text-sm text-muted-foreground flex items-start gap-2">
+                                  <div className="w-1.5 h-1.5 bg-primary rounded-full mt-2 flex-shrink-0" />
+                                  {claim}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="counterargs" className="mt-4">
+                  <div className="prose prose-sm max-w-none">
+                    <h4 className="text-foreground font-semibold mb-3 flex items-center gap-2">
+                      <AlertTriangle className="w-5 h-5 text-primary" />
+                      ⚔️ Anticipated Counterattacks
+                    </h4>
+                    <div className="space-y-4">
+                      {enhancedFeedback.counterArguments.map((counter, i) => (
+                        <div key={i} className="border border-muted rounded-lg p-4">
+                          <div className="flex items-center justify-between mb-2">
+                            <h5 className="font-medium text-foreground">Counterargument #{i + 1}</h5>
+                            <Badge variant={counter.strengthLevel === 'High' ? 'destructive' : counter.strengthLevel === 'Medium' ? 'default' : 'secondary'}>
+                              {counter.strengthLevel} Threat
+                            </Badge>
+                          </div>
+                          <div className="space-y-2">
+                            <div>
+                              <strong className="text-foreground">The Rebuttal:</strong>
+                              <p className="text-muted-foreground mt-1">{counter.rebuttal}</p>
+                            </div>
+                            <div>
+                              <strong className="text-foreground">Supporting Evidence:</strong>
+                              <p className="text-muted-foreground mt-1">{counter.supportingEvidence}</p>
+                            </div>
+                            <div>
+                              <strong className="text-foreground">Common Sources:</strong>
+                              <p className="text-muted-foreground mt-1">{counter.commonSources}</p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="defense" className="mt-4">
+                  <div className="prose prose-sm max-w-none">
+                    <h4 className="text-foreground font-semibold mb-3 flex items-center gap-2">
+                      <Shield className="w-5 h-5 text-primary" />
+                      🛡️ Defense Strategies
+                    </h4>
+                    <div className="space-y-4">
+                      {enhancedFeedback.defenseStrategies.map((strategy, i) => (
+                        <div key={i} className="border border-muted rounded-lg p-4">
+                          <h5 className="font-medium text-foreground mb-3">Defense Strategy #{i + 1}</h5>
+                          <div className="space-y-3">
+                            <div>
+                              <strong className="text-foreground">Pre-emptive Defense:</strong>
+                              <p className="text-muted-foreground mt-1">{strategy.preemptiveDefense}</p>
+                            </div>
+                            <div>
+                              <strong className="text-foreground">Direct Response:</strong>
+                              <p className="text-muted-foreground mt-1">{strategy.directResponse}</p>
+                            </div>
+                            <div>
+                              <strong className="text-foreground">Redirect Technique:</strong>
+                              <p className="text-muted-foreground mt-1">{strategy.redirectTechnique}</p>
+                            </div>
+                            <div>
+                              <strong className="text-foreground">Evidence Arsenal:</strong>
+                              <p className="text-muted-foreground mt-1">{strategy.evidenceArsenal}</p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="mt-6 bg-primary/10 p-4 rounded-lg">
+                      <h5 className="font-medium text-foreground mb-2 flex items-center gap-2">
+                        <Star className="w-4 h-4" />
+                        💡 Strategic Recommendations
+                      </h5>
+                      <ul className="space-y-2">
+                        {enhancedFeedback.strategicRecommendations.map((rec, i) => (
+                          <li key={i} className="text-muted-foreground flex items-start gap-2">
+                            <div className="w-1.5 h-1.5 bg-primary rounded-full mt-2 flex-shrink-0" />
+                            {rec}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                </TabsContent>
+              </>
+            )}
           </Tabs>
         </CardContent>
       </Card>
