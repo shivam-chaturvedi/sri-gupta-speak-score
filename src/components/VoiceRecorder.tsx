@@ -64,6 +64,16 @@ export function VoiceRecorder({
 
       mediaRecorder.onstop = async () => {
         console.log('MediaRecorder stopped, chunks collected:', chunks.length);
+        
+        // Stop speech recognition and get final transcript FIRST
+        let finalTranscript = '';
+        if (speechToText.isSupported()) {
+          console.log('Stopping speech recognition...');
+          finalTranscript = speechToText.stopListening();
+          console.log('Speech recognition stopped, final transcript:', finalTranscript);
+          console.log('Transcript length:', finalTranscript?.length || 0);
+        }
+        
         if (chunks.length === 0) {
           console.error('No audio data was recorded!');
           toast({
@@ -78,11 +88,26 @@ export function VoiceRecorder({
         console.log('Audio blob created, size:', blob.size);
         setAudioBlob(blob);
         setAudioUrl(URL.createObjectURL(blob));
+        
+        // Set the transcript immediately
+        if (finalTranscript && finalTranscript.length > 0) {
+          setTranscript(finalTranscript);
+          console.log('Transcript set successfully:', finalTranscript);
+          toast({
+            title: "Speech transcribed",
+            description: `Captured ${finalTranscript.split(' ').length} words for AI analysis.`,
+          });
+        } else {
+          console.warn('No transcript captured');
+          toast({
+            title: "Speech recognition incomplete",
+            description: "Limited transcript captured. Analysis may be affected.",
+            variant: "destructive",
+          });
+        }
+        
         setIsCompleted(true);
         stream.getTracks().forEach(track => track.stop());
-        
-        // Start transcription
-        await startTranscription();
       };
 
       // Start speech recognition when we start preparation
@@ -130,12 +155,7 @@ export function VoiceRecorder({
                   console.log('Recording time completed, stopping...');
                   mediaRecorder.stop();
                   setIsRecording(false);
-                  // Stop speech recognition when recording stops
-                  if (speechToText.isSupported()) {
-                    console.log('Stopping speech recognition...');
-                    const finalTranscript = speechToText.stopListening();
-                    console.log('Speech recognition stopped, final transcript:', finalTranscript);
-                  }
+                  // Don't stop speech recognition here - let onstop handler do it
                   return duration;
                 }
                 return prev + 1;
@@ -163,10 +183,7 @@ export function VoiceRecorder({
       mediaRecorderRef.current.stop();
       setIsRecording(false);
       if (recordTimerRef.current) clearInterval(recordTimerRef.current);
-      // Stop speech recognition when manually stopping
-      if (speechToText.isSupported()) {
-        speechToText.stopListening();
-      }
+      // Speech recognition will be stopped in the onstop handler
     }
   };
 
@@ -206,54 +223,7 @@ export function VoiceRecorder({
     if (audioRef.current) audioRef.current.pause();
   };
 
-  const startTranscription = async () => {
-    console.log('Starting transcription...');
-    console.log('Speech recognition supported:', speechToText.isSupported());
-    
-    if (!speechToText.isSupported()) {
-      toast({
-        title: "Speech recognition not supported",
-        description: "Your browser doesn't support speech recognition. Analysis will use recorded audio only.",
-        variant: "destructive",
-      });
-      setTranscript("Speech recognition not available - using audio recording for analysis");
-      return;
-    }
-
-    setIsTranscribing(true);
-    
-    try {
-      // Use the speechToText service to get the final transcript
-      const finalTranscript = speechToText.getTranscript();
-      console.log('Final transcript from speechToText:', finalTranscript);
-      console.log('Transcript length:', finalTranscript?.length || 0);
-      
-      if (finalTranscript && finalTranscript.length > 10) {
-        setTranscript(finalTranscript);
-        console.log('Setting transcript:', finalTranscript);
-        toast({
-          title: "Speech transcribed",
-          description: "Your speech has been converted to text for AI analysis.",
-        });
-      } else {
-        console.log('No valid transcript, speech recognition may have failed');
-        toast({
-          title: "Speech recognition incomplete",
-          description: "Speech detection had issues. Please try speaking more clearly.",
-          variant: "destructive",
-        });
-      }
-    } catch (error) {
-      console.error('Transcription failed:', error);
-      toast({
-        title: "Transcription failed",
-        description: "Could not transcribe your speech. AI analysis may be limited.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsTranscribing(false);
-    }
-  };
+  // Removed startTranscription - now handled directly in onstop
 
   const submitRecording = () => {
     if (audioBlob) {

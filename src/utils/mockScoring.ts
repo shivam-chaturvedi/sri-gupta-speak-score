@@ -56,7 +56,7 @@ export interface ScoreData {
 }
 
 // Mock scoring system for MVP - will be replaced with AI scoring
-export function generateMockScore(audioBlob: Blob, motion: string, stance?: string): ScoreData {
+export function generateMockScore(audioBlob: Blob, motion: string, stance?: string, providedTranscript?: string): ScoreData {
   // Simulate realistic scoring with some randomness
   const baseLogic = Math.floor(Math.random() * 3) + 6; // 6-8
   const baseRhetoric = Math.floor(Math.random() * 3) + 6; // 6-8  
@@ -80,8 +80,8 @@ export function generateMockScore(audioBlob: Blob, motion: string, stance?: stri
     overall: generateOverallFeedback(score, motion, stance)
   };
 
-  // Generate mock transcript
-  const transcript = generateMockTranscript(motion, stance);
+  // Use provided transcript or generate mock
+  const transcript = providedTranscript || generateMockTranscript(motion, stance);
   
   // Generate missing points analysis
   const missingPoints = generateMissingPoints(motion, stance);

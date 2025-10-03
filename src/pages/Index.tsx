@@ -59,36 +59,47 @@ const Index = () => {
     
     setSessionData({ ...sessionData, audioBlob });
     
-    // AI analysis with hardcoded API key
-    if (transcript) {
+    console.log('Recording complete. Transcript received:', transcript);
+    console.log('Transcript length:', transcript?.length || 0);
+    
+    // AI analysis - require minimum transcript length
+    if (transcript && transcript.trim().length > 20) {
       setIsAnalyzing(true);
       try {
+        console.log('Starting AI analysis with transcript:', transcript);
         const results = await aiService.analyzeSpeeches({
           transcript,
           topic: sessionData.motion.topic,
           stance: sessionData.stance,
           duration: sessionData.duration
         });
+        console.log('AI analysis successful:', results);
         setScoreData(results);
         setCurrentState("results");
       } catch (error) {
         console.error('AI analysis failed:', error);
         toast({
           title: "AI Analysis Failed",
-          description: "Falling back to demo mode. Please try again.",
+          description: error instanceof Error ? error.message : "Falling back to demo mode.",
           variant: "destructive",
         });
         
         // Fallback to mock scoring
-        const results = generateMockScore(audioBlob, sessionData.motion.topic, sessionData.stance);
+        const results = generateMockScore(audioBlob, sessionData.motion.topic, sessionData.stance, transcript);
         setScoreData(results);
         setCurrentState("results");
       } finally {
         setIsAnalyzing(false);
       }
     } else {
+      console.warn('No valid transcript for AI analysis. Transcript:', transcript);
+      toast({
+        title: "Limited transcript",
+        description: "Speech recognition captured limited text. Using demo analysis.",
+        variant: "destructive",
+      });
       // Fallback to mock scoring if no transcript
-      const results = generateMockScore(audioBlob, sessionData.motion.topic, sessionData.stance);
+      const results = generateMockScore(audioBlob, sessionData.motion.topic, sessionData.stance, transcript || "");
       setScoreData(results);
       setCurrentState("results");
     }
