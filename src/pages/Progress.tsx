@@ -369,7 +369,7 @@ const Progress = () => {
           </TabsContent>
 
           <TabsContent value="progress" className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               <Card>
                 <CardHeader>
                   <CardTitle>Session Progress</CardTitle>
@@ -413,6 +413,31 @@ const Progress = () => {
                     <div className="flex justify-between">
                       <span>Longest Streak</span>
                       <span className="font-semibold">{userProgress?.longest_streak || 0} days</span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Achievements</CardTitle>
+                  <CardDescription>Badges you've earned</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div className="flex justify-between">
+                      <span>Badges Earned</span>
+                      <span className="font-semibold">{earnedBadges.length}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Total Available</span>
+                      <span className="font-semibold">{allBadges.length}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Completion</span>
+                      <span className="font-semibold">
+                        {allBadges.length > 0 ? Math.round((earnedBadges.length / allBadges.length) * 100) : 0}%
+                      </span>
                     </div>
                   </div>
                 </CardContent>
