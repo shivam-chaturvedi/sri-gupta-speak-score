@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { speechToText } from "@/services/speechToText";
+import { whisperService } from "@/services/whisperService";
 import { toast } from "@/hooks/use-toast";
 
 interface VoiceRecorderProps {
@@ -65,13 +66,12 @@ export function VoiceRecorder({
       mediaRecorder.onstop = async () => {
         console.log('MediaRecorder stopped, chunks collected:', chunks.length);
         
-        // Stop speech recognition and get final transcript FIRST
-        let finalTranscript = '';
+        // Stop speech recognition and get browser transcript (as backup)
+        let browserTranscript = '';
         if (speechToText.isSupported()) {
           console.log('Stopping speech recognition...');
-          finalTranscript = speechToText.stopListening();
-          console.log('Speech recognition stopped, final transcript:', finalTranscript);
-          console.log('Transcript length:', finalTranscript?.length || 0);
+          browserTranscript = speechToText.stopListening();
+          console.log('Browser transcript (backup):', browserTranscript);
         }
         
         if (chunks.length === 0) {
@@ -88,26 +88,46 @@ export function VoiceRecorder({
         console.log('Audio blob created, size:', blob.size);
         setAudioBlob(blob);
         setAudioUrl(URL.createObjectURL(blob));
-        
-        // Set the transcript immediately
-        if (finalTranscript && finalTranscript.length > 0) {
-          setTranscript(finalTranscript);
-          console.log('Transcript set successfully:', finalTranscript);
-          toast({
-            title: "Speech transcribed",
-            description: `Captured ${finalTranscript.split(' ').length} words for AI analysis.`,
-          });
-        } else {
-          console.warn('No transcript captured');
-          toast({
-            title: "Speech recognition incomplete",
-            description: "Limited transcript captured. Analysis may be affected.",
-            variant: "destructive",
-          });
-        }
-        
         setIsCompleted(true);
         stream.getTracks().forEach(track => track.stop());
+        
+        // Use Whisper API for high-quality transcription
+        setIsTranscribing(true);
+        try {
+          console.log('Starting Whisper transcription...');
+          const whisperTranscript = await whisperService.transcribeAudio(blob);
+          
+          if (whisperTranscript && whisperTranscript.length > 0) {
+            setTranscript(whisperTranscript);
+            console.log('Whisper transcription successful:', whisperTranscript);
+            toast({
+              title: "Speech transcribed",
+              description: `Successfully transcribed ${whisperTranscript.split(' ').length} words using AI.`,
+            });
+          } else {
+            throw new Error('Empty transcription');
+          }
+        } catch (error) {
+          console.error('Whisper transcription failed:', error);
+          // Fallback to browser transcript
+          if (browserTranscript && browserTranscript.length > 20) {
+            setTranscript(browserTranscript);
+            toast({
+              title: "Using browser transcription",
+              description: "AI transcription failed, using browser backup.",
+              variant: "destructive",
+            });
+          } else {
+            toast({
+              title: "Transcription failed",
+              description: "Could not transcribe speech. Analysis will be limited.",
+              variant: "destructive",
+            });
+            setTranscript("Transcription unavailable");
+          }
+        } finally {
+          setIsTranscribing(false);
+        }
       };
 
       // Start speech recognition when we start preparation
@@ -188,23 +208,38 @@ export function VoiceRecorder({
   };
 
   const playAudio = async () => {
-    if (audioRef.current) {
-      try {
-        if (isPlaying) {
-          audioRef.current.pause();
-          setIsPlaying(false);
-        } else {
-          await audioRef.current.play();
-          setIsPlaying(true);
+    if (!audioRef.current || !audioUrl) {
+      toast({
+        title: "No audio available",
+        description: "Please record audio first.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      if (isPlaying) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+        setIsPlaying(false);
+      } else {
+        // Ensure audio is loaded
+        if (audioRef.current.readyState < 2) {
+          await new Promise((resolve) => {
+            audioRef.current!.onloadeddata = resolve;
+          });
         }
-      } catch (error) {
-        console.error('Audio play failed:', error);
-        toast({
-          title: "Audio playback failed",
-          description: "Could not play the recorded audio.",
-          variant: "destructive",
-        });
+        
+        await audioRef.current.play();
+        setIsPlaying(true);
       }
+    } catch (error) {
+      console.error('Audio playback error:', error);
+      toast({
+        title: "Playback failed",
+        description: "Could not play audio. Try recording again.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -375,6 +410,14 @@ export function VoiceRecorder({
             ref={audioRef}
             src={audioUrl}
             onEnded={() => setIsPlaying(false)}
+            onError={(e) => {
+              console.error('Audio element error:', e);
+              toast({
+                title: "Audio error",
+                description: "Error loading audio file.",
+                variant: "destructive",
+              });
+            }}
             className="hidden"
           />
         )}
