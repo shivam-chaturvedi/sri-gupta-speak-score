@@ -59,7 +59,7 @@ interface SpeechAnalysisRequest {
 }
 
 export class AIService {
-  private apiKey: string = "AIzaSyCsUkpLciG1gmhnHQnxm6hTiBOvXOdvEA4";
+  private apiKey: string = "AIzaSyDemiHqUVekPovaBmYn9AF8FLAJ7g2v8dU";
 
   constructor() {
     // API key is hardcoded
@@ -77,7 +77,7 @@ export class AIService {
     const prompt = this.buildAnalysisPrompt(request);
 
     try {
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${this.apiKey}`, {
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${this.apiKey}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
