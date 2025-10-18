@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { speechToText } from "@/services/speechToText";
+import { whisperService } from "@/services/whisperService";
 import { toast } from "@/hooks/use-toast";
 
 interface VoiceRecorderProps {
@@ -65,12 +66,12 @@ export function VoiceRecorder({
       mediaRecorder.onstop = async () => {
         console.log('MediaRecorder stopped, chunks collected:', chunks.length);
         
-        // Stop speech recognition and get final transcript
-        let finalTranscript = '';
+        // Stop speech recognition and get browser transcript (as backup)
+        let browserTranscript = '';
         if (speechToText.isSupported()) {
           console.log('Stopping speech recognition...');
-          finalTranscript = speechToText.stopListening();
-          console.log('Final transcript:', finalTranscript);
+          browserTranscript = speechToText.stopListening();
+          console.log('Browser transcript (backup):', browserTranscript);
         }
         
         if (chunks.length === 0) {
@@ -90,21 +91,42 @@ export function VoiceRecorder({
         setIsCompleted(true);
         stream.getTracks().forEach(track => track.stop());
         
-        // Use browser transcript
-        if (finalTranscript && finalTranscript.length > 0) {
-          setTranscript(finalTranscript);
-          console.log('Transcription successful:', finalTranscript);
-          toast({
-            title: "Speech transcribed",
-            description: `Successfully transcribed ${finalTranscript.split(' ').length} words.`,
-          });
-        } else {
-          toast({
-            title: "Transcription unavailable",
-            description: "Could not transcribe speech. Analysis will be limited.",
-            variant: "destructive",
-          });
-          setTranscript("Transcription unavailable");
+        // Use Whisper API for high-quality transcription
+        setIsTranscribing(true);
+        try {
+          console.log('Starting Whisper transcription...');
+          const whisperTranscript = await whisperService.transcribeAudio(blob);
+          
+          if (whisperTranscript && whisperTranscript.length > 0) {
+            setTranscript(whisperTranscript);
+            console.log('Whisper transcription successful:', whisperTranscript);
+            toast({
+              title: "Speech transcribed",
+              description: `Successfully transcribed ${whisperTranscript.split(' ').length} words using AI.`,
+            });
+          } else {
+            throw new Error('Empty transcription');
+          }
+        } catch (error) {
+          console.error('Whisper transcription failed:', error);
+          // Fallback to browser transcript
+          if (browserTranscript && browserTranscript.length > 20) {
+            setTranscript(browserTranscript);
+            toast({
+              title: "Using browser transcription",
+              description: "AI transcription failed, using browser backup.",
+              variant: "destructive",
+            });
+          } else {
+            toast({
+              title: "Transcription failed",
+              description: "Could not transcribe speech. Analysis will be limited.",
+              variant: "destructive",
+            });
+            setTranscript("Transcription unavailable");
+          }
+        } finally {
+          setIsTranscribing(false);
         }
       };
 
