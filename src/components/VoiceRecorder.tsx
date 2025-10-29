@@ -3,8 +3,6 @@ import { Mic, MicOff, Play, Pause, RotateCcw, CheckCircle, Loader2 } from "lucid
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { speechToText } from "@/services/speechToText";
-import { whisperService } from "@/services/whisperService";
 import { toast } from "@/hooks/use-toast";
 
 interface VoiceRecorderProps {
@@ -33,13 +31,90 @@ export function VoiceRecorder({
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [audioUrl, setAudioUrl] = useState<string>("");
   const [isCompleted, setIsCompleted] = useState(false);
-  const [transcript, setTranscript] = useState<string>("");
+      const [transcript, setTranscript] = useState<string>("");
   const [isTranscribing, setIsTranscribing] = useState(false);
+  const [showLoader, setShowLoader] = useState(false);
+  const [recognitionTranscript, setRecognitionTranscript] = useState<string>("");
+  const [currentTranscript, setCurrentTranscript] = useState<string>("");
+  const [isListening, setIsListening] = useState(false);
+  const [recognition, setRecognition] = useState<any>(null);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const prepTimerRef = useRef<NodeJS.Timeout | null>(null);
   const recordTimerRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Initialize Speech Recognition - matching VoiceAssistant pattern
+  useEffect(() => {
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      const recognitionInstance = new SpeechRecognition();
+      
+      recognitionInstance.continuous = true;
+      recognitionInstance.interimResults = true;
+      recognitionInstance.lang = 'en-US';
+      
+      recognitionInstance.onstart = () => {
+        setIsListening(true);
+        setCurrentTranscript('');
+        console.log('Speech recognition started');
+      };
+      
+      recognitionInstance.onresult = (event: any) => {
+        let finalTranscript = '';
+        let interimTranscript = '';
+        
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            finalTranscript += transcript;
+          } else {
+            interimTranscript += transcript;
+          }
+        }
+        
+        // Update current transcript for live display (like VoiceAssistant)
+        setCurrentTranscript(interimTranscript);
+        
+        // When we get final transcript, add it to accumulated transcript
+        if (finalTranscript) {
+          setRecognitionTranscript(prev => {
+            const newTranscript = (prev + finalTranscript).trim();
+            // Update display transcript with accumulated + interim
+            setTranscript(newTranscript + (interimTranscript ? ' ' + interimTranscript : ''));
+            return newTranscript;
+          });
+        } else if (interimTranscript) {
+          // Show accumulated + interim for live preview
+          setTranscript(recognitionTranscript + (recognitionTranscript ? ' ' : '') + interimTranscript);
+        }
+      };
+      
+      recognitionInstance.onerror = (event: any) => {
+        console.error('Speech recognition error:', event.error);
+        if (event.error !== 'no-speech') {
+          // Silent error handling - no toast
+        }
+      };
+      
+      recognitionInstance.onend = () => {
+        setIsListening(false);
+        console.log('Speech recognition ended');
+      };
+      
+      setRecognition(recognitionInstance);
+    }
+    
+    return () => {
+      if (recognition) {
+        try {
+          recognition.stop();
+        } catch (e) {
+          // Ignore errors on cleanup
+        }
+      }
+    };
+  }, []);
 
   const startPrep = async () => {
     try {
@@ -66,21 +141,8 @@ export function VoiceRecorder({
       mediaRecorder.onstop = async () => {
         console.log('MediaRecorder stopped, chunks collected:', chunks.length);
         
-        // Stop speech recognition and get browser transcript (as backup)
-        let browserTranscript = '';
-        if (speechToText.isSupported()) {
-          console.log('Stopping speech recognition...');
-          browserTranscript = speechToText.stopListening();
-          console.log('Browser transcript (backup):', browserTranscript);
-        }
-        
         if (chunks.length === 0) {
           console.error('No audio data was recorded!');
-          toast({
-            title: "Recording failed",
-            description: "No audio data was captured. Please try again.",
-            variant: "destructive",
-          });
           return;
         }
         
@@ -91,82 +153,103 @@ export function VoiceRecorder({
         setIsCompleted(true);
         stream.getTracks().forEach(track => track.stop());
         
-        // Use Whisper API for high-quality transcription
-        setIsTranscribing(true);
-        try {
-          console.log('Starting Whisper transcription...');
-          const whisperTranscript = await whisperService.transcribeAudio(blob);
-          
-          if (whisperTranscript && whisperTranscript.length > 0) {
-            setTranscript(whisperTranscript);
-            console.log('Whisper transcription successful:', whisperTranscript);
-            toast({
-              title: "Speech transcribed",
-              description: `Successfully transcribed ${whisperTranscript.split(' ').length} words using AI.`,
-            });
-          } else {
-            throw new Error('Empty transcription');
+        // Wait a bit more to ensure final results are captured
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        
+        // Stop speech recognition and wait for it to finish
+        if (recognition && isListening) {
+          try {
+            recognition.stop();
+            // Wait for onend to fire
+            await new Promise(resolve => setTimeout(resolve, 500));
+          } catch (e) {
+            console.log('Recognition already stopped');
           }
-        } catch (error) {
-          console.error('Whisper transcription failed:', error);
-          // Fallback to browser transcript
-          if (browserTranscript && browserTranscript.length > 20) {
-            setTranscript(browserTranscript);
-            toast({
-              title: "Using browser transcription",
-              description: "AI transcription failed, using browser backup.",
-              variant: "destructive",
-            });
-          } else {
-            toast({
-              title: "Transcription failed",
-              description: "Could not transcribe speech. Analysis will be limited.",
-              variant: "destructive",
-            });
-            setTranscript("Transcription unavailable");
-          }
-        } finally {
-          setIsTranscribing(false);
         }
+        
+        // Get the final transcript - use recognitionTranscript which has all final results
+        let finalTranscript = recognitionTranscript.trim();
+        
+        // If recognitionTranscript is empty, try transcript state
+        if (!finalTranscript || finalTranscript.length === 0) {
+          finalTranscript = transcript.trim();
+        }
+        
+        // Remove any error messages from transcript before checking
+        const cleanTranscript = finalTranscript
+          .replace(/Please speak clearly\. No transcript was captured\./g, '')
+          .replace(/No transcript was captured/g, '')
+          .trim();
+        
+        console.log('🔍 Transcript Debug:');
+        console.log('  recognitionTranscript:', recognitionTranscript);
+        console.log('  transcript state:', transcript);
+        console.log('  currentTranscript:', currentTranscript);
+        console.log('  cleanTranscript:', cleanTranscript);
+        
+        // If we have a valid transcript (not empty and not error message)
+        // Only set error message if we truly have NO transcript at all
+        if (cleanTranscript && cleanTranscript.length > 0) {
+          setTranscript(cleanTranscript);
+          console.log('✅ Transcript captured successfully:', cleanTranscript.substring(0, 100));
+        } else if (recognitionTranscript.trim().length > 0) {
+          // Double check - if recognitionTranscript has content, use it
+          setTranscript(recognitionTranscript.trim());
+          console.log('✅ Using recognitionTranscript:', recognitionTranscript.trim().substring(0, 100));
+        } else if (transcript.trim().length > 0 && !transcript.includes("No transcript")) {
+          // Triple check - if current transcript state has content, use it
+          setTranscript(transcript.trim());
+          console.log('✅ Using current transcript state:', transcript.trim().substring(0, 100));
+        } else {
+          console.warn('❌ No valid transcript found after all checks');
+          // Only set error message if absolutely nothing was captured
+          setTranscript("Please speak clearly. No transcript was captured.");
+        }
+        setIsTranscribing(false);
       };
 
-      // Start speech recognition when we start preparation
-      if (speechToText.isSupported()) {
-        console.log('Starting speech recognition...');
+      // Start speech recognition when recording starts - exactly like VoiceAssistant
+      if (recognition && !isListening) {
         try {
-          await speechToText.startListening(
-            (transcript) => {
-              // Real-time transcript updates during recording
-              console.log('Real-time transcript update:', transcript);
-              // Update transcript in real-time so user can see progress
-              setTranscript(transcript);
-            },
-            (error) => {
-              console.error('Speech recognition error:', error);
-              toast({
-                title: "Speech recognition error",
-                description: error,
-                variant: "destructive",
-              });
-            }
-          );
-          console.log('Speech recognition started successfully');
+          setRecognitionTranscript("");
+          setTranscript("");
+          setCurrentTranscript("");
+          recognition.start();
+          console.log('Speech recognition started');
         } catch (error) {
-          console.error('Failed to start speech recognition:', error);
+          console.log('Speech recognition start error:', error);
+          // Try to restart if already started
+          if (recognition) {
+            try {
+              recognition.stop();
+              setTimeout(() => recognition.start(), 100);
+            } catch (e) {
+              console.error('Failed to restart recognition:', e);
+            }
+          }
         }
-      } else {
-        console.log('Speech recognition not supported');
       }
 
       setIsPreparing(true);
       setPrepTime(10);
 
-      prepTimerRef.current = setInterval(() => {
+            prepTimerRef.current = setInterval(() => {
         setPrepTime(prev => {
           if (prev <= 1) {
             setIsPreparing(false);
             setIsRecording(true);
             setRecordTime(0);
+            
+            // Ensure speech recognition is running before starting media recorder
+            if (recognition && !isListening) {
+              try {
+                recognition.start();
+                console.log('Speech recognition started at recording start');
+              } catch (e) {
+                console.log('Recognition start error (may already be running):', e);
+              }
+            }
+            
             mediaRecorder.start();
             
             recordTimerRef.current = setInterval(() => {
@@ -262,7 +345,34 @@ export function VoiceRecorder({
 
   const submitRecording = () => {
     if (audioBlob) {
-      onRecordingComplete(audioBlob, transcript);
+      setShowLoader(true);
+      
+      // Use the best available transcript - prioritize recognitionTranscript (final results)
+      let finalTranscript = recognitionTranscript.trim();
+      
+      // Fallback to transcript state if recognitionTranscript is empty
+      if (!finalTranscript || finalTranscript.length === 0) {
+        finalTranscript = transcript.trim();
+      }
+      
+      // Clean any error messages from transcript
+      const cleanedForSubmit = finalTranscript
+        .replace(/Please speak clearly\. No transcript was captured\./g, '')
+        .replace(/No transcript was captured/g, '')
+        .replace(/please speak clearly/gi, '')
+        .trim();
+      
+      console.log('📤 Submitting recording:');
+      console.log('  Original transcript:', finalTranscript.substring(0, 100));
+      console.log('  Cleaned transcript:', cleanedForSubmit.substring(0, 100));
+      
+      // Only submit if we have a valid transcript (not error message)
+      if (cleanedForSubmit && cleanedForSubmit.length > 0) {
+        onRecordingComplete(audioBlob, cleanedForSubmit);
+      } else {
+        console.warn('⚠️ No valid transcript to submit - will show error');
+        onRecordingComplete(audioBlob, undefined);
+      }
     }
   };
 
@@ -340,6 +450,16 @@ export function VoiceRecorder({
           </div>
         </div>
 
+        {/* Transcript Display */}
+        {isCompleted && transcript && (
+          <div className="space-y-2">
+            <div className="text-sm font-medium text-foreground">Transcript:</div>
+            <div className="p-3 bg-speech-card rounded-lg border border-border text-sm text-muted-foreground max-h-32 overflow-y-auto">
+              {transcript}
+            </div>
+          </div>
+        )}
+
         {/* Controls */}
         <div className="space-y-3">
           {!isCompleted && !isRecording && !isPreparing && (
@@ -384,13 +504,23 @@ export function VoiceRecorder({
                 </Button>
               </div>
               
-              <Button
-                onClick={submitRecording}
-                className="w-full bg-gradient-success hover:opacity-90 border-0 text-white font-semibold py-3 h-12"
-              >
-                <CheckCircle className="w-4 h-4 mr-2" />
-                Get My Score
-              </Button>
+              {!showLoader ? (
+                <Button
+                  onClick={submitRecording}
+                  className="w-full bg-gradient-success hover:opacity-90 border-0 text-white font-semibold py-3 h-12"
+                >
+                  <CheckCircle className="w-4 h-4 mr-2" />
+                  Get My Score
+                </Button>
+              ) : (
+                <Button
+                  disabled
+                  className="w-full bg-gradient-success hover:opacity-90 border-0 text-white font-semibold py-3 h-12"
+                >
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Analyzing...
+                </Button>
+              )}
             </div>
           )}
 

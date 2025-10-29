@@ -42,7 +42,7 @@ declare global {
 
 export class SpeechToTextService {
   private recognition: SpeechRecognition | null = null;
-  private isListening = false;
+  public isListening = false;
   private transcript = '';
   private interimTranscript = '';
   private onResult: ((transcript: string) => void) | null = null;
@@ -74,7 +74,7 @@ export class SpeechToTextService {
         if (event.results[i].isFinal) {
           finalTranscript += transcript + ' ';
         } else {
-          interimTranscript += transcript;
+          interimTranscript += transcript + ' ';
         }
       }
 
@@ -90,15 +90,30 @@ export class SpeechToTextService {
       const currentResult = (this.transcript + ' ' + interimTranscript).trim();
       this.onResult?.(currentResult);
     };
+    
+    // Handle case when recognition ends but might still have data
+    this.recognition.onend = () => {
+      this.isListening = false;
+      // Make sure we return any pending transcript
+      if (this.transcript.trim().length > 0 || this.interimTranscript.trim().length > 0) {
+        const finalResult = (this.transcript + ' ' + this.interimTranscript).trim();
+        this.onResult?.(finalResult);
+      }
+    };
 
     this.recognition.onerror = (event) => {
       console.error('Speech recognition error:', event.error);
-      this.onError?.(`Speech recognition error: ${event.error}`);
+      
+      // Don't treat "no-speech" as a fatal error during recording
+      // It's common when user pauses or during brief silences
+      if (event.error !== 'no-speech') {
+        this.onError?.(`Speech recognition error: ${event.error}`);
+      } else {
+        console.log('No speech detected (normal during pauses)');
+      }
     };
 
-    this.recognition.onend = () => {
-      this.isListening = false;
-    };
+    // Note: onend handler moved above to handle transcript before ending
   }
 
   isSupported(): boolean {
@@ -133,10 +148,15 @@ export class SpeechToTextService {
 
   stopListening(): string {
     if (this.recognition && this.isListening) {
+      // Get current transcript including interim before stopping
+      const currentTranscript = (this.transcript + ' ' + this.interimTranscript).trim();
       this.recognition.stop();
       this.isListening = false;
+      // Return the complete transcript including any interim results
+      return currentTranscript || this.transcript.trim();
     }
-    return this.transcript.trim();
+    // Return transcript even if not listening
+    return (this.transcript + ' ' + this.interimTranscript).trim() || this.transcript.trim();
   }
 
   getTranscript(): string {

@@ -1,35 +1,16 @@
-import { useState } from "react";
-import { Mic, Target, Trophy, Zap, Heart, Sparkles, Loader2, User } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Mic, Target, Trophy, Zap, Heart, Sparkles, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MotionCard } from "@/components/MotionCard";
-import { VoiceRecorder } from "@/components/VoiceRecorder";
-import { ScoreDisplay } from "@/components/ScoreDisplay";
-import { ApiKeyModal } from "@/components/ApiKeyModal";
 import { getDailyMotion, getRandomMotions, motions as allMotionsData, type Motion } from "@/data/motions";
-import { generateMockScore } from "@/utils/mockScoring";
-import { aiService } from "@/services/aiService";
-import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
-type AppState = "home" | "recording" | "results";
-
-interface SessionData {
-  motion: Motion;
-  duration: number;
-  stance?: string;
-  audioBlob?: Blob;
-}
-
-const Index = () => {
+const Home = () => {
   const { user, signOut } = useAuth();
-  const [currentState, setCurrentState] = useState<AppState>("home");
-  const [sessionData, setSessionData] = useState<SessionData | null>(null);
-  const [scoreData, setScoreData] = useState<any>(null);
-  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const navigate = useNavigate();
   const [selectedTheme, setSelectedTheme] = useState<string>("All Themes");
   const [motions, setMotions] = useState(() => {
     const daily = getDailyMotion();
@@ -50,152 +31,11 @@ const Index = () => {
   const dailyMotion = motions[0];
 
   const handleStartSpeech = (motion: Motion, duration: number, stance?: string) => {
-    setSessionData({ motion, duration, stance });
-    setCurrentState("recording");
+    // Navigate to recording page with state
+    navigate("/recording", { 
+      state: { motion, duration, stance }
+    });
   };
-
-  const handleRecordingComplete = async (audioBlob: Blob, transcript?: string) => {
-    if (!sessionData) return;
-    
-    setSessionData({ ...sessionData, audioBlob });
-    
-    console.log('Recording complete. Transcript received:', transcript);
-    console.log('Transcript length:', transcript?.length || 0);
-    
-    // AI analysis - require minimum transcript length
-    if (transcript && transcript.trim().length > 20) {
-      setIsAnalyzing(true);
-      try {
-        console.log('Starting AI analysis with transcript:', transcript);
-        const results = await aiService.analyzeSpeeches({
-          transcript,
-          topic: sessionData.motion.topic,
-          stance: sessionData.stance,
-          duration: sessionData.duration
-        });
-        console.log('AI analysis successful:', results);
-        setScoreData(results);
-        setCurrentState("results");
-      } catch (error) {
-        console.error('AI analysis failed:', error);
-        toast({
-          title: "AI Analysis Failed",
-          description: error instanceof Error ? error.message : "Falling back to demo mode.",
-          variant: "destructive",
-        });
-        
-        // Fallback to mock scoring
-        const results = generateMockScore(audioBlob, sessionData.motion.topic, sessionData.stance, transcript);
-        setScoreData(results);
-        setCurrentState("results");
-      } finally {
-        setIsAnalyzing(false);
-      }
-    } else {
-      console.warn('No valid transcript for AI analysis. Transcript:', transcript);
-      
-      // Check if transcript is unavailable or empty
-      const transcriptUnavailable = !transcript || transcript === "Transcription unavailable" || transcript.trim().length < 20;
-      
-      if (transcriptUnavailable) {
-        toast({
-          title: "Recording Failed",
-          description: "Could not capture speech. Please check your microphone and try again.",
-          variant: "destructive",
-        });
-        
-        // Don't show results, just go back to recording
-        setCurrentState("recording");
-        setScoreData(null);
-        return;
-      }
-      
-      // If there's some text but it's limited, show a warning but still proceed
-      toast({
-        title: "Limited transcript",
-        description: "Speech recognition captured limited text. Using demo analysis.",
-        variant: "destructive",
-      });
-      // Fallback to mock scoring if no transcript
-      const results = generateMockScore(audioBlob, sessionData.motion.topic, sessionData.stance, transcript || "");
-      setScoreData(results);
-      setCurrentState("results");
-    }
-  };
-
-  const handleApiKeySet = (apiKey: string) => {
-    localStorage.setItem('gemini_api_key', apiKey);
-    aiService.setApiKey(apiKey);
-    
-    // Continue with AI analysis if we have a pending recording
-    if (sessionData?.audioBlob) {
-      handleRecordingComplete(sessionData.audioBlob, "Transcript would be generated here");
-    }
-  };
-
-  const handleTryAgain = () => {
-    // Reset session data to start a fresh recording
-    setScoreData(null);
-    // Keep the same motion/stance/duration but clear old audio/transcript
-    if (sessionData) {
-      setSessionData({
-        motion: sessionData.motion,
-        duration: sessionData.duration,
-        stance: sessionData.stance
-        // Don't include old audioBlob - this forces a new recording
-      });
-    }
-    setCurrentState("recording");
-  };
-
-  const handleNewTopic = () => {
-    // Generate new random motions
-    const daily = getDailyMotion();
-    const random = getRandomMotions(2);
-    setMotions([daily, ...random]);
-    setCurrentState("home");
-    setSessionData(null);
-    setScoreData(null);
-  };
-
-  const handleBackToHome = () => {
-    setCurrentState("home");
-    setSessionData(null);
-    setScoreData(null);
-  };
-
-  if (currentState === "recording" && sessionData) {
-    return (
-      <div className="min-h-screen bg-speech-bg p-4 flex items-center justify-center">
-        <VoiceRecorder
-          motion={sessionData.motion}
-          duration={sessionData.duration}
-          stance={sessionData.stance}
-          onRecordingComplete={handleRecordingComplete}
-          onBack={handleBackToHome}
-        />
-      </div>
-    );
-  }
-
-  if (currentState === "results" && sessionData && scoreData) {
-    return (
-      <div className="min-h-screen bg-speech-bg p-4 py-8">
-        <ScoreDisplay
-          motion={sessionData.motion}
-          stance={sessionData.stance}
-          score={scoreData.score}
-          feedback={scoreData.feedback}
-          transcript={scoreData.transcript}
-          missingPoints={scoreData.missingPoints}
-          enhancedArgument={scoreData.enhancedArgument}
-          enhancedFeedback={scoreData.enhancedFeedback}
-          onTryAgain={handleTryAgain}
-          onNewTopic={handleNewTopic}
-        />
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-speech-bg">
@@ -406,30 +246,9 @@ const Index = () => {
           </Card>
         </div>
       </div>
-
-      {/* API Key Modal */}
-      <ApiKeyModal
-        isOpen={showApiKeyModal}
-        onApiKeySet={handleApiKeySet}
-        onClose={() => setShowApiKeyModal(false)}
-      />
-
-      {/* Loading Overlay for AI Analysis */}
-      {isAnalyzing && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
-          <Card className="bg-speech-card border-0 shadow-xl p-8">
-            <div className="flex flex-col items-center gap-4">
-              <Loader2 className="w-8 h-8 animate-spin text-primary" />
-              <div className="text-center">
-                <h3 className="font-semibold text-foreground mb-2">Analyzing Your Speech</h3>
-                <p className="text-sm text-muted-foreground">AI is evaluating your logic, rhetoric, empathy, and delivery...</p>
-              </div>
-            </div>
-          </Card>
-        </div>
-      )}
     </div>
   );
 };
 
-export default Index;
+export default Home;
+

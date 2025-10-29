@@ -59,7 +59,7 @@ interface SpeechAnalysisRequest {
 }
 
 export class AIService {
-  private apiKey: string = "AIzaSyCsUkpLciG1gmhnHQnxm6hTiBOvXOdvEA4";
+  private apiKey: string = "AIzaSyCTCIx4gdJmRQ6iGN6gj89NCtsAjeRY7uU";
 
   constructor() {
     // API key is hardcoded
@@ -77,10 +77,15 @@ export class AIService {
     const prompt = this.buildAnalysisPrompt(request);
 
     try {
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${this.apiKey}`, {
+      // Use Gemini 2.5 Flash model with header-based authentication
+      const apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
+      console.log('Calling Gemini 2.5 Flash API...');
+      
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'x-goog-api-key': this.apiKey,
         },
         body: JSON.stringify({
           contents: [
@@ -94,28 +99,81 @@ export class AIService {
           ],
           generationConfig: {
             temperature: 0.7,
-            maxOutputTokens: 4000,
+            topP: 0.9,
+            topK: 40,
+            maxOutputTokens: 8192,
           }
         }),
       });
 
       if (!response.ok) {
-        throw new Error(`API request failed: ${response.statusText}`);
+        const errorText = await response.text();
+        console.error('API request failed:', response.status, response.statusText);
+        console.error('Error response body:', errorText);
+        
+        let errorMessage = `API request failed: ${response.status} ${response.statusText}`;
+        
+        try {
+          const errorJson = JSON.parse(errorText);
+          // Gemini API error format
+          if (errorJson.error) {
+            errorMessage = errorJson.error.message || errorJson.error.status || errorMessage;
+          } else if (errorJson.message) {
+            errorMessage = errorJson.message;
+          }
+        } catch (e) {
+          // If error response is not JSON, use the text (limit length)
+          errorMessage = errorText ? (errorText.substring(0, 200) + (errorText.length > 200 ? '...' : '')) : errorMessage;
+        }
+        
+        // Provide specific guidance for common errors
+        if (response.status === 404) {
+          errorMessage = 'API endpoint not found. The Gemini API endpoint may have changed or the API key is invalid.';
+        } else if (response.status === 401 || response.status === 403) {
+          errorMessage = 'Invalid API key. Please check your Google Gemini API key and ensure it has the correct permissions.';
+        } else if (response.status === 429) {
+          errorMessage = 'API rate limit exceeded. Please try again later.';
+        }
+        
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
+      
+      // Check for API errors in response
+      if (data.error) {
+        throw new Error(`AI API error: ${data.error.message || JSON.stringify(data.error)}`);
+      }
+
+      // Check if response structure is valid
+      if (!data.candidates || !data.candidates[0] || !data.candidates[0].content || !data.candidates[0].content.parts || !data.candidates[0].content.parts[0]) {
+        console.error('Invalid API response structure:', data);
+        throw new Error('Invalid response format from AI service');
+      }
+
       const analysis = data.candidates[0].content.parts[0].text;
+
+      if (!analysis) {
+        throw new Error('Empty response from AI service');
+      }
 
       return this.parseAnalysis(analysis, request.transcript);
     } catch (error) {
       console.error('AI analysis failed:', error);
-      throw error;
+      // Provide more helpful error messages
+      if (error instanceof Error) {
+        // Check if it's an API key issue
+        if (error.message.includes('API_KEY') || error.message.includes('401') || error.message.includes('403')) {
+          throw new Error('Invalid API key. Please check your Google Gemini API key.');
+        }
+        throw error;
+      }
+      throw new Error('AI analysis failed due to an unknown error');
     }
   }
 
   private buildAnalysisPrompt(request: SpeechAnalysisRequest): string {
-    return `
-You are an EXPERT DEBATE COACH and ARGUMENT STRATEGIST. Analyze this debate speech with brutal honesty and provide SPECIFIC, ACTIONABLE feedback.
+    return `You are an EXPERT DEBATE COACH and ARGUMENT STRATEGIST. Analyze this debate speech with CRITICAL ACURACY and provide SPECIFIC, QUANTIFIABLE feedback.
 
 DEBATE TOPIC: "${request.topic}"
 STANCE: ${request.stance ? request.stance.toUpperCase() : 'NEUTRAL'}
@@ -124,13 +182,46 @@ DURATION: ${request.duration} seconds
 TRANSCRIPT:
 "${request.transcript}"
 
-Your job is to:
-1. Identify the STRONGEST points in their argument
-2. Find MISSING evidence and arguments they should have used
-3. Predict opponent's BEST counterattacks
-4. Provide SPECIFIC defense strategies with real data
+SCORING CRITERIA:
+- Logic (0-10): Argument structure, reasoning quality, evidence quality, logical flow, fallacy detection
+- Rhetoric (0-10): Persuasive language, rhetorical devices used, emotional appeal, storytelling, call-to-action
+- Empathy (0-5): Perspective-taking, recognizing opposing views, tone appropriateness, audience connection
+- Delivery (0-5): Clarity from transcript, organization, coherence, confidence indicators in wording
 
-Provide analysis in this EXACT JSON format:
+RULES FOR ACCURATE SCORING:
+1. Logic Score: 
+   - 9-10: Outstanding structure with clear premises→conclusion chains
+   - 7-8: Good arguments but minor gaps in logic or evidence
+   - 5-6: Some valid points but significant logical weaknesses
+   - 3-4: Major flaws in reasoning or missing evidence
+   - 0-2: Fundamental logical errors or no coherent argument
+
+2. Rhetoric Score:
+   - 9-10: Masterful use of rhetorical devices, powerful language, compelling narrative
+   - 7-8: Good persuasive techniques with room for improvement
+   - 5-6: Basic persuasive language but lacks impact
+   - 3-4: Weak rhetorical choices, not engaging
+   - 0-2: No clear persuasive strategy
+
+3. Empathy Score:
+   - 5: Shows deep understanding of multiple perspectives
+   - 4: Good awareness of other viewpoints
+   - 3: Some recognition of opposing views
+   - 2: Limited perspective-taking
+   - 1: No consideration of others' perspectives
+   - 0: Dismissive or antagonistic tone
+
+4. Delivery Score (from transcript only):
+   - 5: Extremely clear, organized, confident expression
+   - 4: Clear and well-organized
+   - 3: Generally understandable
+   - 2: Unclear or disorganized
+   - 1: Very difficult to understand
+   - 0: Incomprehensible
+
+CRITICAL: Score ACCURATELY based on the actual content. Be BRUTAL if they deserve low scores. Be GENEROUS only if they deserve high scores. No participation trophies!
+
+Provide analysis in this EXACT JSON format (NO MARKDOWN, NO CODE BLOCKS, JUST PURE JSON):
 
 {
   "logic_score": [0-10],
@@ -245,29 +336,55 @@ Provide analysis in this EXACT JSON format:
   }
 }
 
-CRITICAL REQUIREMENTS:
-- Every piece of feedback must be SPECIFIC and ACTIONABLE
-- Include REAL statistics, studies, experts (even if examples - make them realistic)
-- NO generic advice like "be more confident" - give EXACT techniques
-- Counterarguments must be GENUINELY STRONG (what a skilled opponent would use)
-- Defense strategies must include SPECIFIC phrases and data points
-- Enhanced argument must be 2-3x better than original
-- Be BRUTALLY HONEST about weaknesses but CONSTRUCTIVELY supportive
-- Think like a debate coach who wants them to WIN
+CRITICAL REQUIREMENTS FOR ACCURACY:
+- Score BASED ON ACTUAL PERFORMANCE, not participation
+- Logic: Review argument structure, logical connections, evidence use, fallacies
+- Rhetoric: Analyze persuasive devices (ethos, pathos, logos), language impact, narrative structure
+- Empathy: Look for perspective-taking, acknowledgment of counterarguments, respectful tone
+- Delivery: Assess clarity from transcript, organization, coherence, articulation indicators
+- Provide SPECIFIC, CONCRETE examples from their speech
+- Give ACTIONABLE advice with exact techniques to improve
+- NO vague feedback like "be better" - give SPECIFIC strategies
+- Enhanced argument should be dramatically improved, not just polished
 
-Return ONLY valid JSON, no additional text.
+JSON FORMAT REQUIREMENTS:
+- Return ONLY valid JSON object
+- NO markdown code blocks
+- NO text before or after the JSON
+- NO explanations, just the JSON
+- All scores must be integers
+- All arrays must contain strings
+- Example structure (use real analysis from their speech):
+{"logic_score":7,"logic_feedback":["Weak evidence for X","Missing logical bridge between Y and Z","Add statistic on..."],"rhetoric_score":6,"rhetoric_feedback":["Used metaphor effectively","Lacks emotional appeal","Needs stronger call to action"],"empathy_score":3,"empathy_feedback":["Didn't acknowledge opposing view","Failed to address counterargument about..."],"delivery_score":4,"delivery_feedback":["Clear but needs more confidence indicators","Good organization"],"missing_points":["Stat on climate from IPCC 2023","Historical precedent: Kyoto Protocol 1997"],"enhanced_argument":"[Full rewritten version]"}
+
+Return the analysis as pure JSON starting with { and ending with }
 `;
   }
 
   private parseAnalysis(analysis: string, originalTranscript: string): ScoreResult {
     try {
+      // Clean the response - remove markdown code blocks if present
+      let cleanedAnalysis = analysis.trim();
+      
+      // Remove markdown code fences if present
+      cleanedAnalysis = cleanedAnalysis.replace(/^```json\s*/i, '').replace(/^```\s*/i, '');
+      cleanedAnalysis = cleanedAnalysis.replace(/\s*```\s*$/i, '');
+      
       // Extract JSON from the response
-      const jsonMatch = analysis.match(/\{[\s\S]*\}/);
+      const jsonMatch = cleanedAnalysis.match(/\{[\s\S]*\}/);
       if (!jsonMatch) {
-        throw new Error('No JSON found in AI response');
+        console.error('No JSON found in AI response. Response:', analysis.substring(0, 500));
+        throw new Error('No JSON found in AI response. The AI may not have returned valid JSON format.');
       }
 
-      const parsed = JSON.parse(jsonMatch[0]);
+      let parsed;
+      try {
+        parsed = JSON.parse(jsonMatch[0]);
+      } catch (parseError) {
+        console.error('JSON parse error:', parseError);
+        console.error('Attempted to parse:', jsonMatch[0].substring(0, 500));
+        throw new Error('Failed to parse AI response as JSON. The response format may be invalid.');
+      }
 
       const logicScore = parsed.logic_score || 0;
       const rhetoricScore = parsed.rhetoric_score || 0;
