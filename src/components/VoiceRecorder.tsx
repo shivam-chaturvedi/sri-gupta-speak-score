@@ -31,8 +31,7 @@ export function VoiceRecorder({
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [audioUrl, setAudioUrl] = useState<string>("");
   const [isCompleted, setIsCompleted] = useState(false);
-      const [transcript, setTranscript] = useState<string>("");
-  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [transcript, setTranscript] = useState<string>("");
   const [showLoader, setShowLoader] = useState(false);
   const [recognitionTranscript, setRecognitionTranscript] = useState<string>("");
   const [currentTranscript, setCurrentTranscript] = useState<string>("");
@@ -43,12 +42,38 @@ export function VoiceRecorder({
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const prepTimerRef = useRef<NodeJS.Timeout | null>(null);
   const recordTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const transcriptRef = useRef("");
+  const recognitionTranscriptRef = useRef("");
+  const currentTranscriptRef = useRef("");
+
+  const updateTranscript = (value: string) => {
+    transcriptRef.current = value;
+    setTranscript(value);
+  };
+
+  const updateRecognitionTranscript = (value: string) => {
+    recognitionTranscriptRef.current = value;
+    setRecognitionTranscript(value);
+  };
+
+  const updateCurrentTranscript = (value: string) => {
+    currentTranscriptRef.current = value;
+    setCurrentTranscript(value);
+  };
+
+  const joinTranscript = (...parts: string[]) =>
+    parts
+      .map(part => part?.trim())
+      .filter(Boolean)
+      .join(" ");
   
   // Initialize Speech Recognition - matching VoiceAssistant pattern
   useEffect(() => {
+    let recognitionInstance: any = null;
+
     if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-      const recognitionInstance = new SpeechRecognition();
+      recognitionInstance = new SpeechRecognition();
       
       recognitionInstance.continuous = true;
       recognitionInstance.interimResults = true;
@@ -56,7 +81,7 @@ export function VoiceRecorder({
       
       recognitionInstance.onstart = () => {
         setIsListening(true);
-        setCurrentTranscript('');
+        updateCurrentTranscript("");
         console.log('Speech recognition started');
       };
       
@@ -65,28 +90,28 @@ export function VoiceRecorder({
         let interimTranscript = '';
         
         for (let i = event.resultIndex; i < event.results.length; i++) {
-          const transcript = event.results[i][0].transcript;
+          const transcriptChunk = event.results[i][0].transcript;
           if (event.results[i].isFinal) {
-            finalTranscript += transcript;
+            finalTranscript += transcriptChunk;
           } else {
-            interimTranscript += transcript;
+            interimTranscript += transcriptChunk;
           }
         }
         
-        // Update current transcript for live display (like VoiceAssistant)
-        setCurrentTranscript(interimTranscript);
+        updateCurrentTranscript(interimTranscript);
         
-        // When we get final transcript, add it to accumulated transcript
         if (finalTranscript) {
-          setRecognitionTranscript(prev => {
-            const newTranscript = (prev + finalTranscript).trim();
-            // Update display transcript with accumulated + interim
-            setTranscript(newTranscript + (interimTranscript ? ' ' + interimTranscript : ''));
-            return newTranscript;
-          });
+          const accumulatedFinal = joinTranscript(recognitionTranscriptRef.current, finalTranscript);
+          updateRecognitionTranscript(accumulatedFinal);
+          const displayValue = interimTranscript
+            ? joinTranscript(accumulatedFinal, interimTranscript)
+            : accumulatedFinal;
+          updateTranscript(displayValue);
         } else if (interimTranscript) {
-          // Show accumulated + interim for live preview
-          setTranscript(recognitionTranscript + (recognitionTranscript ? ' ' : '') + interimTranscript);
+          const displayValue = joinTranscript(recognitionTranscriptRef.current, interimTranscript);
+          updateTranscript(displayValue);
+        } else if (recognitionTranscriptRef.current) {
+          updateTranscript(recognitionTranscriptRef.current);
         }
       };
       
@@ -99,16 +124,19 @@ export function VoiceRecorder({
       
       recognitionInstance.onend = () => {
         setIsListening(false);
+        updateCurrentTranscript("");
+        if (recognitionTranscriptRef.current) {
+          updateTranscript(recognitionTranscriptRef.current);
+        }
         console.log('Speech recognition ended');
       };
-      
       setRecognition(recognitionInstance);
     }
     
     return () => {
-      if (recognition) {
+      if (recognitionInstance) {
         try {
-          recognition.stop();
+          recognitionInstance.stop();
         } catch (e) {
           // Ignore errors on cleanup
         }
@@ -168,11 +196,11 @@ export function VoiceRecorder({
         }
         
         // Get the final transcript - use recognitionTranscript which has all final results
-        let finalTranscript = recognitionTranscript.trim();
+        let finalTranscript = recognitionTranscriptRef.current.trim();
         
         // If recognitionTranscript is empty, try transcript state
         if (!finalTranscript || finalTranscript.length === 0) {
-          finalTranscript = transcript.trim();
+          finalTranscript = transcriptRef.current.trim();
         }
         
         // Remove any error messages from transcript before checking
@@ -182,38 +210,37 @@ export function VoiceRecorder({
           .trim();
         
         console.log('🔍 Transcript Debug:');
-        console.log('  recognitionTranscript:', recognitionTranscript);
-        console.log('  transcript state:', transcript);
-        console.log('  currentTranscript:', currentTranscript);
+        console.log('  recognitionTranscript:', recognitionTranscriptRef.current);
+        console.log('  transcript state:', transcriptRef.current);
+        console.log('  currentTranscript:', currentTranscriptRef.current);
         console.log('  cleanTranscript:', cleanTranscript);
         
         // If we have a valid transcript (not empty and not error message)
         // Only set error message if we truly have NO transcript at all
         if (cleanTranscript && cleanTranscript.length > 0) {
-          setTranscript(cleanTranscript);
+          updateTranscript(cleanTranscript);
           console.log('✅ Transcript captured successfully:', cleanTranscript.substring(0, 100));
-        } else if (recognitionTranscript.trim().length > 0) {
+        } else if (recognitionTranscriptRef.current.trim().length > 0) {
           // Double check - if recognitionTranscript has content, use it
-          setTranscript(recognitionTranscript.trim());
-          console.log('✅ Using recognitionTranscript:', recognitionTranscript.trim().substring(0, 100));
-        } else if (transcript.trim().length > 0 && !transcript.includes("No transcript")) {
+          updateTranscript(recognitionTranscriptRef.current.trim());
+          console.log('✅ Using recognitionTranscript:', recognitionTranscriptRef.current.trim().substring(0, 100));
+        } else if (transcriptRef.current.trim().length > 0 && !transcriptRef.current.includes("No transcript")) {
           // Triple check - if current transcript state has content, use it
-          setTranscript(transcript.trim());
-          console.log('✅ Using current transcript state:', transcript.trim().substring(0, 100));
+          updateTranscript(transcriptRef.current.trim());
+          console.log('✅ Using current transcript state:', transcriptRef.current.trim().substring(0, 100));
         } else {
           console.warn('❌ No valid transcript found after all checks');
           // Only set error message if absolutely nothing was captured
-          setTranscript("Please speak clearly. No transcript was captured.");
+          updateTranscript("Please speak clearly. No transcript was captured.");
         }
-        setIsTranscribing(false);
       };
 
       // Start speech recognition when recording starts - exactly like VoiceAssistant
       if (recognition && !isListening) {
         try {
-          setRecognitionTranscript("");
-          setTranscript("");
-          setCurrentTranscript("");
+          updateRecognitionTranscript("");
+          updateTranscript("");
+          updateCurrentTranscript("");
           recognition.start();
           console.log('Speech recognition started');
         } catch (error) {
@@ -233,7 +260,7 @@ export function VoiceRecorder({
       setIsPreparing(true);
       setPrepTime(10);
 
-            prepTimerRef.current = setInterval(() => {
+      prepTimerRef.current = setInterval(() => {
         setPrepTime(prev => {
           if (prev <= 1) {
             setIsPreparing(false);
@@ -335,6 +362,10 @@ export function VoiceRecorder({
     setAudioBlob(null);
     setAudioUrl("");
     setIsCompleted(false);
+    setShowLoader(false);
+    updateTranscript("");
+    updateRecognitionTranscript("");
+    updateCurrentTranscript("");
     
     if (prepTimerRef.current) clearInterval(prepTimerRef.current);
     if (recordTimerRef.current) clearInterval(recordTimerRef.current);
@@ -348,11 +379,11 @@ export function VoiceRecorder({
       setShowLoader(true);
       
       // Use the best available transcript - prioritize recognitionTranscript (final results)
-      let finalTranscript = recognitionTranscript.trim();
+      let finalTranscript = recognitionTranscriptRef.current.trim();
       
       // Fallback to transcript state if recognitionTranscript is empty
       if (!finalTranscript || finalTranscript.length === 0) {
-        finalTranscript = transcript.trim();
+        finalTranscript = transcriptRef.current.trim();
       }
       
       // Clean any error messages from transcript
@@ -395,6 +426,11 @@ export function VoiceRecorder({
     if (isCompleted) return "Recording complete!";
     return "Ready to record";
   };
+
+  const trimmedTranscript = transcript.trim();
+  const trimmedCurrentTranscript = currentTranscript.trim();
+  const displayTranscript = trimmedTranscript.length > 0 ? transcript : currentTranscript;
+  const hasTranscript = trimmedTranscript.length > 0 || trimmedCurrentTranscript.length > 0;
 
   return (
     <Card className="w-full max-w-md mx-auto bg-gradient-to-br from-speech-card to-speech-card/90 border-0 shadow-speech">
@@ -451,11 +487,22 @@ export function VoiceRecorder({
         </div>
 
         {/* Transcript Display */}
-        {isCompleted && transcript && (
+        {hasTranscript && (
           <div className="space-y-2">
-            <div className="text-sm font-medium text-foreground">Transcript:</div>
-            <div className="p-3 bg-speech-card rounded-lg border border-border text-sm text-muted-foreground max-h-32 overflow-y-auto">
-              {transcript}
+            <div className="flex items-center justify-between text-sm">
+              <span className="font-medium text-foreground">
+                {isCompleted ? "Transcript" : "Live transcript"}
+              </span>
+              {!isCompleted && (
+                <span className="text-xs text-muted-foreground">Updating in real time</span>
+              )}
+            </div>
+            <div
+              className="p-3 bg-speech-card rounded-lg border border-border text-sm text-foreground max-h-40 overflow-y-auto whitespace-pre-wrap"
+              role="status"
+              aria-live="polite"
+            >
+              {displayTranscript}
             </div>
           </div>
         )}
