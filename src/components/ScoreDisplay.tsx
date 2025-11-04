@@ -11,6 +11,7 @@ interface CounterArgument {
   strengthLevel: 'Low' | 'Medium' | 'High';
   supportingEvidence: string;
   commonSources: string;
+  keyPoints?: string[];
 }
 
 interface DefenseStrategy {
@@ -18,6 +19,7 @@ interface DefenseStrategy {
   directResponse: string;
   redirectTechnique: string;
   evidenceArsenal: string;
+  keyPoints?: string[];
 }
 
 interface EnhancedFeedback {
@@ -363,13 +365,13 @@ export function ScoreDisplay({
                     <div className="space-y-4">
                       {enhancedFeedback.counterArguments.map((counter, i) => (
                         <div key={i} className="border border-muted rounded-lg p-4">
-                          <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center justify-between mb-3">
                             <h5 className="font-medium text-foreground">Counterargument #{i + 1}</h5>
                             <Badge variant={counter.strengthLevel === 'High' ? 'destructive' : counter.strengthLevel === 'Medium' ? 'default' : 'secondary'}>
                               {counter.strengthLevel} Threat
                             </Badge>
                           </div>
-                          <div className="space-y-2">
+                          <div className="space-y-3">
                             <div>
                               <strong className="text-foreground">The Rebuttal:</strong>
                               <p className="text-muted-foreground mt-1">{counter.rebuttal}</p>
@@ -382,6 +384,22 @@ export function ScoreDisplay({
                               <strong className="text-foreground">Common Sources:</strong>
                               <p className="text-muted-foreground mt-1">{counter.commonSources}</p>
                             </div>
+                            {counter.keyPoints && counter.keyPoints.length > 0 && (
+                              <div>
+                                <strong className="text-foreground flex items-center gap-2 mb-2">
+                                  <AlertTriangle className="w-4 h-4" />
+                                  Key Talking Points (Opponent Will Use):
+                                </strong>
+                                <ul className="space-y-2 ml-6">
+                                  {counter.keyPoints.map((point, idx) => (
+                                    <li key={idx} className="text-muted-foreground flex items-start gap-2">
+                                      <div className="w-1.5 h-1.5 bg-destructive rounded-full mt-2 flex-shrink-0" />
+                                      <span>{point}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
                           </div>
                         </div>
                       ))}
@@ -398,7 +416,7 @@ export function ScoreDisplay({
                     <div className="space-y-4">
                       {enhancedFeedback.defenseStrategies.map((strategy, i) => (
                         <div key={i} className="border border-muted rounded-lg p-4">
-                          <h5 className="font-medium text-foreground mb-3">Defense Strategy #{i + 1}</h5>
+                          <h5 className="font-medium text-foreground mb-3">Defense Strategy #{i + 1} (Against Counterargument #{i + 1})</h5>
                           <div className="space-y-3">
                             <div>
                               <strong className="text-foreground">Pre-emptive Defense:</strong>
@@ -416,6 +434,22 @@ export function ScoreDisplay({
                               <strong className="text-foreground">Evidence Arsenal:</strong>
                               <p className="text-muted-foreground mt-1">{strategy.evidenceArsenal}</p>
                             </div>
+                            {strategy.keyPoints && strategy.keyPoints.length > 0 && (
+                              <div>
+                                <strong className="text-foreground flex items-center gap-2 mb-2">
+                                  <Shield className="w-4 h-4" />
+                                  Key Talking Points (Use These to Defend):
+                                </strong>
+                                <ul className="space-y-2 ml-6">
+                                  {strategy.keyPoints.map((point, idx) => (
+                                    <li key={idx} className="text-muted-foreground flex items-start gap-2">
+                                      <div className="w-1.5 h-1.5 bg-success rounded-full mt-2 flex-shrink-0" />
+                                      <span>{point}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
                           </div>
                         </div>
                       ))}
