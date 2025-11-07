@@ -35,6 +35,21 @@ interface SessionStats {
   perfect_scores: number;
 }
 
+interface Session {
+  id: string;
+  motion_topic: string;
+  stance: string | null;
+  overall_score: number | null;
+  duration: number;
+  transcript: string | null;
+  feedback: any;
+  score_logic: number | null;
+  score_rhetoric: number | null;
+  score_empathy: number | null;
+  score_delivery: number | null;
+  created_at: string;
+}
+
 const ICON_MAP = {
   Trophy, Calendar, Star, Target, Zap, TrendingUp, Award, Crown,
   BookOpen: Trophy, GraduationCap: Award, Brain: Star, ThumbsUp: Target,
@@ -57,6 +72,7 @@ const Progress = () => {
   const [allBadges, setAllBadges] = useState<Badge[]>([]);
   const [earnedBadges, setEarnedBadges] = useState<Badge[]>([]);
   const [sessionStats, setSessionStats] = useState<SessionStats | null>(null);
+  const [sessions, setSessions] = useState<Session[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -118,15 +134,19 @@ const Progress = () => {
         earned_at: item.earned_at
       })) || []);
 
-      // Fetch session statistics
+      // Fetch session statistics with all data for display
       const { data: sessionsData, error: sessionsError } = await supabase
         .from('debate_sessions')
-        .select('overall_score, duration')
-        .eq('user_id', user!.id);
+        .select('id, motion_topic, stance, overall_score, duration, transcript, feedback, score_logic, score_rhetoric, score_empathy, score_delivery, created_at')
+        .eq('user_id', user!.id)
+        .order('created_at', { ascending: false });
 
       if (sessionsError) throw sessionsError;
 
       if (sessionsData) {
+        // Store all sessions for display
+        setSessions(sessionsData as Session[]);
+        
         const validSessions = sessionsData.filter(s => s.overall_score !== null);
         const totalSessions = validSessions.length;
         const averageScore = totalSessions > 0 
@@ -140,8 +160,8 @@ const Progress = () => {
           perfect_scores: perfectScores
         });
 
-        // Update progress with session data
-        await updateProgressFromSessions(validSessions);
+        // Update progress with session data (but don't call fetchProgressData again to avoid infinite loop)
+        await updateProgressFromSessions(validSessions, false);
       }
 
     } catch (error) {
@@ -156,7 +176,7 @@ const Progress = () => {
     }
   };
 
-  const updateProgressFromSessions = async (sessions: any[]) => {
+  const updateProgressFromSessions = async (sessions: any[], shouldRefresh: boolean = false) => {
     if (sessions.length === 0 || !user) return;
 
     const totalTimeSpent = sessions.reduce((sum, s) => sum + (s.duration || 0), 0);
@@ -197,7 +217,7 @@ const Progress = () => {
       longestStreak = newStreak;
     }
 
-    const { error } = await supabase
+    const { data: updatedProgress, error } = await supabase
       .from('user_progress')
       .update({
         total_time_spent: totalTimeSpent,
@@ -207,13 +227,15 @@ const Progress = () => {
         last_activity_date: today,
         updated_at: new Date().toISOString()
       })
-      .eq('user_id', user.id);
+      .eq('user_id', user.id)
+      .select()
+      .single();
 
     if (error) {
       console.error('Error updating progress:', error);
-    } else {
-      // Refresh progress data
-      await fetchProgressData();
+    } else if (updatedProgress) {
+      // Update local state directly instead of calling fetchProgressData to avoid infinite loop
+      setUserProgress(updatedProgress);
     }
   };
 
@@ -496,6 +518,75 @@ const Progress = () => {
                 </CardContent>
               </Card>
             </div>
+
+            {/* Session History */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Recent Sessions</CardTitle>
+                <CardDescription>Your recent debate practice sessions</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {sessions.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-8">No sessions yet. Start practicing to see your history here!</p>
+                ) : (
+                  <div className="space-y-4">
+                    {sessions.slice(0, 10).map((session) => {
+                      const feedback = session.feedback || {};
+                      const enhancedFeedback = feedback.enhancedFeedback || {};
+                      return (
+                        <Card key={session.id} className="border-l-4 border-l-primary">
+                          <CardContent className="p-4">
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                              <div className="flex-1 min-w-0">
+                                <h3 className="font-semibold text-lg mb-1 break-words">{session.motion_topic}</h3>
+                                <div className="flex flex-wrap gap-2 text-sm text-muted-foreground mb-2">
+                                  {session.stance && (
+                                    <Badge variant="outline">{session.stance}</Badge>
+                                  )}
+                                  <span>{new Date(session.created_at).toLocaleDateString()}</span>
+                                  <span>•</span>
+                                  <span>{session.duration}s</span>
+                                </div>
+                                {session.overall_score !== null && (
+                                  <div className="flex gap-4 text-sm mt-2">
+                                    <span>Score: <strong>{session.overall_score}%</strong></span>
+                                    {session.score_logic !== null && (
+                                      <span>Logic: <strong>{session.score_logic}</strong></span>
+                                    )}
+                                    {session.score_rhetoric !== null && (
+                                      <span>Rhetoric: <strong>{session.score_rhetoric}</strong></span>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                              {session.overall_score !== null && (
+                                <div className="text-right">
+                                  <div className="text-2xl font-bold text-primary">{session.overall_score}%</div>
+                                </div>
+                              )}
+                            </div>
+                            {session.transcript && (
+                              <div className="mt-3 pt-3 border-t">
+                                <p className="text-sm text-muted-foreground line-clamp-2">
+                                  {session.transcript.substring(0, 150)}...
+                                </p>
+                              </div>
+                            )}
+                            {enhancedFeedback.argumentAnalysis && (
+                              <div className="mt-3 pt-3 border-t">
+                                <p className="text-xs text-muted-foreground">
+                                  Analysis available • {enhancedFeedback.counterArguments?.length || 0} counter arguments
+                                </p>
+                              </div>
+                            )}
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
 
           <TabsContent value="stats" className="space-y-6">

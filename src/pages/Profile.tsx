@@ -139,35 +139,36 @@ const Profile = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background to-secondary/20">
-      <div className="container mx-auto px-4 py-8 max-w-4xl">
+      <div className="container mx-auto px-4 sm:px-6 py-4 sm:py-8 max-w-4xl">
         {/* Back to Home Button */}
         <Link to="/">
           <Button
             variant="ghost"
-            className="mb-6 flex items-center gap-2"
+            className="mb-4 sm:mb-6 flex items-center gap-2 text-sm sm:text-base"
           >
             <ArrowLeft className="w-4 h-4" />
-            Back to Home
+            <span className="hidden sm:inline">Back to Home</span>
+            <span className="sm:hidden">Back</span>
           </Button>
         </Link>
 
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold mb-2">Profile</h1>
-          <p className="text-muted-foreground">Manage your account information and preferences</p>
+        <div className="mb-6 sm:mb-8">
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-2">Profile</h1>
+          <p className="text-sm sm:text-base text-muted-foreground">Manage your account information and preferences</p>
         </div>
 
         {/* Profile Card */}
-        <Card className="mb-6">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle>Profile Information</CardTitle>
+        <Card className="mb-4 sm:mb-6">
+          <CardHeader className="pb-4 sm:pb-6">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0">
+              <CardTitle className="text-lg sm:text-xl">Profile Information</CardTitle>
               {!isEditing && (
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => setIsEditing(true)}
-                  className="flex items-center gap-2"
+                  className="flex items-center gap-2 w-full sm:w-auto"
                 >
                   <Edit2 className="w-4 h-4" />
                   Edit
@@ -175,20 +176,20 @@ const Profile = () => {
               )}
             </div>
           </CardHeader>
-          <CardContent className="space-y-6">
+          <CardContent className="space-y-4 sm:space-y-6">
             {/* Avatar Section */}
-            <div className="flex items-center gap-6">
-              <Avatar className="h-24 w-24">
-                <AvatarFallback className="text-2xl font-bold bg-primary/10">
+            <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 sm:gap-6">
+              <Avatar className="h-20 w-20 sm:h-24 sm:w-24 flex-shrink-0">
+                <AvatarFallback className="text-xl sm:text-2xl font-bold bg-primary/10">
                   {displayName?.charAt(0).toUpperCase() || userInitial}
                 </AvatarFallback>
               </Avatar>
-              <div>
-                <h3 className="text-xl font-semibold">
+              <div className="text-center sm:text-left flex-1 min-w-0">
+                <h3 className="text-lg sm:text-xl font-semibold break-words">
                   {displayName || user.email || 'User'}
                 </h3>
-                <p className="text-muted-foreground">{user.email}</p>
-                <Badge variant="outline" className="mt-2">
+                <p className="text-sm sm:text-base text-muted-foreground break-words mt-1">{user.email}</p>
+                <Badge variant="outline" className="mt-2 text-xs sm:text-sm">
                   Member since {joinDate}
                 </Badge>
               </div>
@@ -198,22 +199,23 @@ const Profile = () => {
             {isEditing ? (
               <div className="space-y-4 pt-4 border-t">
                 <div className="space-y-2">
-                  <Label htmlFor="displayName">Display Name</Label>
+                  <Label htmlFor="displayName" className="text-sm sm:text-base">Display Name</Label>
                   <Input
                     id="displayName"
                     value={displayName}
                     onChange={(e) => setDisplayName(e.target.value)}
                     placeholder="Enter your display name"
+                    className="text-sm sm:text-base"
                   />
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs sm:text-sm text-muted-foreground">
                     This name will be displayed on your profile and progress page
                   </p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-col sm:flex-row gap-2">
                   <Button
                     onClick={handleSave}
                     disabled={isSaving}
-                    className="flex items-center gap-2"
+                    className="flex items-center justify-center gap-2 w-full sm:w-auto"
                   >
                     <Save className="w-4 h-4" />
                     {isSaving ? 'Saving...' : 'Save Changes'}
@@ -222,7 +224,7 @@ const Profile = () => {
                     variant="outline"
                     onClick={handleCancel}
                     disabled={isSaving}
-                    className="flex items-center gap-2"
+                    className="flex items-center justify-center gap-2 w-full sm:w-auto"
                   >
                     <X className="w-4 h-4" />
                     Cancel
@@ -230,28 +232,28 @@ const Profile = () => {
                 </div>
               </div>
             ) : (
-              <div className="space-y-4 pt-4 border-t">
-                <div className="flex items-center gap-3">
-                  <User className="w-5 h-5 text-muted-foreground" />
-                  <div>
-                    <p className="text-sm font-medium">Display Name</p>
-                    <p className="text-sm text-muted-foreground">
+              <div className="space-y-3 sm:space-y-4 pt-4 border-t">
+                <div className="flex items-start sm:items-center gap-3">
+                  <User className="w-5 h-5 text-muted-foreground flex-shrink-0 mt-0.5 sm:mt-0" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm sm:text-base font-medium">Display Name</p>
+                    <p className="text-sm sm:text-base text-muted-foreground break-words">
                       {displayName || 'Not set'}
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <Mail className="w-5 h-5 text-muted-foreground" />
-                  <div>
-                    <p className="text-sm font-medium">Email Address</p>
-                    <p className="text-sm text-muted-foreground">{user.email}</p>
+                <div className="flex items-start sm:items-center gap-3">
+                  <Mail className="w-5 h-5 text-muted-foreground flex-shrink-0 mt-0.5 sm:mt-0" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm sm:text-base font-medium">Email Address</p>
+                    <p className="text-sm sm:text-base text-muted-foreground break-words">{user.email}</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <Calendar className="w-5 h-5 text-muted-foreground" />
-                  <div>
-                    <p className="text-sm font-medium">Member Since</p>
-                    <p className="text-sm text-muted-foreground">{joinDate}</p>
+                <div className="flex items-start sm:items-center gap-3">
+                  <Calendar className="w-5 h-5 text-muted-foreground flex-shrink-0 mt-0.5 sm:mt-0" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm sm:text-base font-medium">Member Since</p>
+                    <p className="text-sm sm:text-base text-muted-foreground break-words">{joinDate}</p>
                   </div>
                 </div>
               </div>
@@ -260,17 +262,17 @@ const Profile = () => {
         </Card>
 
         {/* Quick Actions */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
           <Link to="/progress">
-            <Card className="hover:shadow-lg transition-shadow cursor-pointer">
-              <CardContent className="p-6">
-                <div className="flex items-center gap-4">
-                  <div className="p-3 bg-primary/10 rounded-lg">
-                    <User className="w-6 h-6 text-primary" />
+            <Card className="hover:shadow-lg transition-shadow cursor-pointer h-full">
+              <CardContent className="p-4 sm:p-6">
+                <div className="flex items-center gap-3 sm:gap-4">
+                  <div className="p-2.5 sm:p-3 bg-primary/10 rounded-lg flex-shrink-0">
+                    <User className="w-5 h-5 sm:w-6 sm:h-6 text-primary" />
                   </div>
-                  <div>
-                    <h3 className="font-semibold">View Progress</h3>
-                    <p className="text-sm text-muted-foreground">
+                  <div className="min-w-0 flex-1">
+                    <h3 className="font-semibold text-sm sm:text-base">View Progress</h3>
+                    <p className="text-xs sm:text-sm text-muted-foreground mt-1">
                       Track your achievements and stats
                     </p>
                   </div>
@@ -280,15 +282,15 @@ const Profile = () => {
           </Link>
 
           <Link to="/">
-            <Card className="hover:shadow-lg transition-shadow cursor-pointer">
-              <CardContent className="p-6">
-                <div className="flex items-center gap-4">
-                  <div className="p-3 bg-success/10 rounded-lg">
-                    <ArrowLeft className="w-6 h-6 text-success" />
+            <Card className="hover:shadow-lg transition-shadow cursor-pointer h-full">
+              <CardContent className="p-4 sm:p-6">
+                <div className="flex items-center gap-3 sm:gap-4">
+                  <div className="p-2.5 sm:p-3 bg-success/10 rounded-lg flex-shrink-0">
+                    <ArrowLeft className="w-5 h-5 sm:w-6 sm:h-6 text-success" />
                   </div>
-                  <div>
-                    <h3 className="font-semibold">Start Practicing</h3>
-                    <p className="text-sm text-muted-foreground">
+                  <div className="min-w-0 flex-1">
+                    <h3 className="font-semibold text-sm sm:text-base">Start Practicing</h3>
+                    <p className="text-xs sm:text-sm text-muted-foreground mt-1">
                       Choose a topic and begin
                     </p>
                   </div>

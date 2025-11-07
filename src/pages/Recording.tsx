@@ -163,6 +163,26 @@ const Recording = () => {
     }
 
     try {
+      // Prepare comprehensive feedback object with all analysis data
+      const comprehensiveFeedback = {
+        // Enhanced feedback structure
+        enhancedFeedback: results.enhancedFeedback || null,
+        // Missing points array
+        missingPoints: results.missingPoints || [],
+        // Enhanced argument text
+        enhancedArgument: results.enhancedArgument || null,
+        // All score details
+        scores: {
+          logic: results.score?.logic || null,
+          rhetoric: results.score?.rhetoric || null,
+          empathy: results.score?.empathy || null,
+          delivery: results.score?.delivery || null,
+          total: results.score?.total || null
+        },
+        // Full feedback object if available
+        feedback: results.feedback || null
+      };
+
       const sessionData = {
         user_id: user.id,
         motion_id: motion.id,
@@ -175,7 +195,7 @@ const Recording = () => {
         score_empathy: results.score?.empathy || null,
         score_delivery: results.score?.delivery || null,
         overall_score: results.score?.total || null,
-        feedback: results.enhancedFeedback || null
+        feedback: comprehensiveFeedback // Save all analysis data in feedback JSONB field
       };
 
       const { error } = await supabase
@@ -184,9 +204,10 @@ const Recording = () => {
 
       if (error) {
         console.error('Error saving session to Supabase:', error);
+        console.error('Error details:', JSON.stringify(error, null, 2));
         // Don't show error to user, just log it
       } else {
-        console.log('✅ Session saved to Supabase successfully');
+        console.log('✅ Session saved to Supabase successfully with all analysis data');
       }
     } catch (error) {
       console.error('Error saving session:', error);

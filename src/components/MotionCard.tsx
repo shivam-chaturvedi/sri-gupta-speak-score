@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Clock, Play, Mic, RotateCcw, LogIn } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -33,6 +33,12 @@ interface MotionCardProps {
 export function MotionCard({ motion, onStartSpeech, isLoggedIn = false }: MotionCardProps) {
   const [selectedStance, setSelectedStance] = useState<string>("");
   const [selectedDuration, setSelectedDuration] = useState<number>(60);
+
+  // Reset stance when motion changes to prevent state from persisting incorrectly
+  useEffect(() => {
+    // Reset stance when motion ID changes (new motion selected)
+    setSelectedStance("");
+  }, [motion.id]); // Reset when motion ID changes
 
   const getCategoryColor = (category: string) => {
     const colors = {
@@ -79,29 +85,41 @@ export function MotionCard({ motion, onStartSpeech, isLoggedIn = false }: Motion
       </CardHeader>
 
       <CardContent className="space-y-4">
-        {motion.type === "stance" && (
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-foreground">Choose your stance:</label>
+        {motion && motion.type === "stance" ? (
+          <div className="space-y-2" key={`stance-${motion.id}`}>
+            <label className="text-sm font-medium text-foreground block">Choose your stance:</label>
             <div className="grid grid-cols-2 gap-2">
               <Button
                 variant={selectedStance === "for" ? "default" : "outline"}
                 size="sm"
-                onClick={() => setSelectedStance("for")}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setSelectedStance("for");
+                }}
                 className="h-8"
+                type="button"
+                key={`for-${motion.id}`}
               >
                 For
               </Button>
               <Button
                 variant={selectedStance === "against" ? "default" : "outline"}
                 size="sm"
-                onClick={() => setSelectedStance("against")}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setSelectedStance("against");
+                }}
                 className="h-8"
+                type="button"
+                key={`against-${motion.id}`}
               >
                 Against
               </Button>
             </div>
           </div>
-        )}
+        ) : null}
 
         <div className="space-y-2">
           <label className="text-sm font-medium text-foreground">Speech duration:</label>

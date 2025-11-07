@@ -197,30 +197,30 @@ export function ScoreDisplay({
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="transcript" className="w-full">
-            <TabsList className="grid w-full grid-cols-6">
-              <TabsTrigger value="transcript" className="flex items-center gap-1 text-xs">
-                <MessageSquare className="w-3 h-3" />
-                Speech
+            <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-1.5 sm:gap-1 h-auto p-1.5 sm:p-1">
+              <TabsTrigger value="transcript" className="flex flex-col sm:flex-row items-center justify-center gap-1 text-[10px] sm:text-xs px-2 sm:px-3 py-2.5 sm:py-1.5 min-h-[48px] sm:min-h-0">
+                <MessageSquare className="w-4 h-4 sm:w-3 sm:h-3 flex-shrink-0" />
+                <span className="text-center">Speech</span>
               </TabsTrigger>
-              <TabsTrigger value="missing" className="flex items-center gap-1 text-xs">
-                <Lightbulb className="w-3 h-3" />
-                Missing
+              <TabsTrigger value="missing" className="flex flex-col sm:flex-row items-center justify-center gap-1 text-[10px] sm:text-xs px-2 sm:px-3 py-2.5 sm:py-1.5 min-h-[48px] sm:min-h-0">
+                <Lightbulb className="w-4 h-4 sm:w-3 sm:h-3 flex-shrink-0" />
+                <span className="text-center">Missing</span>
               </TabsTrigger>
-              <TabsTrigger value="enhanced" className="flex items-center gap-1 text-xs">
-                <Star className="w-3 h-3" />
-                Enhanced
+              <TabsTrigger value="enhanced" className="flex flex-col sm:flex-row items-center justify-center gap-1 text-[10px] sm:text-xs px-2 sm:px-3 py-2.5 sm:py-1.5 min-h-[48px] sm:min-h-0">
+                <Star className="w-4 h-4 sm:w-3 sm:h-3 flex-shrink-0" />
+                <span className="text-center">Enhanced</span>
               </TabsTrigger>
-              <TabsTrigger value="analysis" className="flex items-center gap-1 text-xs">
-                <Brain className="w-3 h-3" />
-                Analysis
+              <TabsTrigger value="analysis" className="flex flex-col sm:flex-row items-center justify-center gap-1 text-[10px] sm:text-xs px-2 sm:px-3 py-2.5 sm:py-1.5 min-h-[48px] sm:min-h-0">
+                <Brain className="w-4 h-4 sm:w-3 sm:h-3 flex-shrink-0" />
+                <span className="text-center">Analysis</span>
               </TabsTrigger>
-              <TabsTrigger value="counterargs" className="flex items-center gap-1 text-xs">
-                <AlertTriangle className="w-3 h-3" />
-                Counters
+              <TabsTrigger value="counterargs" className="flex flex-col sm:flex-row items-center justify-center gap-1 text-[10px] sm:text-xs px-2 sm:px-3 py-2.5 sm:py-1.5 min-h-[48px] sm:min-h-0">
+                <AlertTriangle className="w-4 h-4 sm:w-3 sm:h-3 flex-shrink-0" />
+                <span className="text-center">Counters</span>
               </TabsTrigger>
-              <TabsTrigger value="defense" className="flex items-center gap-1 text-xs">
-                <Shield className="w-3 h-3" />
-                Defense
+              <TabsTrigger value="defense" className="flex flex-col sm:flex-row items-center justify-center gap-1 text-[10px] sm:text-xs px-2 sm:px-3 py-2.5 sm:py-1.5 min-h-[48px] sm:min-h-0">
+                <Shield className="w-4 h-4 sm:w-3 sm:h-3 flex-shrink-0" />
+                <span className="text-center">Defense</span>
               </TabsTrigger>
             </TabsList>
             

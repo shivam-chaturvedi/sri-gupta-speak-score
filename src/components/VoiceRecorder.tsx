@@ -406,10 +406,20 @@ export function VoiceRecorder({
           updateTranscript(transcriptRef.current.trim());
           console.log('✅ Using current transcript state:', transcriptRef.current.trim().substring(0, 100));
         } else {
-          // No transcript from browser - show transcribe button
-          console.log('📝 No transcript from browser, showing transcribe button');
-          setShowTranscribeButton(true);
-          updateTranscript(""); // Clear any error messages
+          // Webkit speech recognition FAILED (no transcript) - show transcribe button to use AssemblyAI
+          // Only show button if webkit was attempted (supported) but failed, OR if webkit is not supported
+          const webkitWasAttempted = speechRecognitionSupported && (recognition || isListening);
+          const webkitNotSupported = !speechRecognitionSupported;
+          
+          if (webkitWasAttempted || webkitNotSupported) {
+            console.log('📝 Webkit speech recognition failed or not supported, showing transcribe button for AssemblyAI');
+            setShowTranscribeButton(true);
+            setUsingAssemblyAIFallback(true);
+            updateTranscript(""); // Clear any error messages
+          } else {
+            console.log('⚠️ No transcript but webkit status unclear');
+            updateTranscript("No transcript captured. Please try recording again.");
+          }
         }
       };
 
