@@ -165,6 +165,8 @@ const Recording = () => {
     try {
       // Prepare comprehensive feedback object with all analysis data
       const comprehensiveFeedback = {
+        // Stance information
+        stance: stance || null,
         // Enhanced feedback structure
         enhancedFeedback: results.enhancedFeedback || null,
         // Missing points array

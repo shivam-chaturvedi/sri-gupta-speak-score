@@ -196,10 +196,14 @@ export class AIService {
   }
 
   private buildAnalysisPrompt(request: SpeechAnalysisRequest): string {
+    const stanceContext = request.stance 
+      ? `\n\n⚠️ CRITICAL: The speaker is arguing ${request.stance.toUpperCase()} this motion. You MUST evaluate whether their arguments effectively support their chosen stance. If they argue ${request.stance === 'for' ? 'AGAINST' : 'FOR'} when they should argue ${request.stance.toUpperCase()}, this is a MAJOR flaw. Their logic, evidence, and rhetoric must align with arguing ${request.stance.toUpperCase()}.`
+      : '\n\nNOTE: This is a neutral opinion piece (no specific stance required).';
+    
     return `You are an EXPERT DEBATE COACH, ARGUMENT STRATEGIST, and COMPETITIVE DEBATE JUDGE with 20+ years of experience. You have trained world championship debaters. Analyze this debate speech with MILITARY PRECISION and provide BRUTALLY HONEST, SPECIFIC, ACTIONABLE feedback.
 
 DEBATE TOPIC: "${request.topic}"
-STANCE: ${request.stance ? request.stance.toUpperCase() : 'NEUTRAL'}
+STANCE: ${request.stance ? request.stance.toUpperCase() : 'NEUTRAL/OPINION'}${stanceContext}
 DURATION: ${request.duration} seconds
 
 TRANSCRIPT:
@@ -266,6 +270,7 @@ Provide analysis in this EXACT JSON format (NO MARKDOWN, NO CODE BLOCKS, JUST PU
 {
   "logic_score": [0-10],
   "logic_feedback": [
+    ${request.stance ? `"STANCE ALIGNMENT CHECK: First, verify if their arguments actually support arguing ${request.stance.toUpperCase()}. If they argue the opposite or are neutral, this is a CRITICAL logical error. Quote where they contradict their stance. Example: 'You chose to argue ${request.stance.toUpperCase()}, but when you said \"[exact quote]\", you actually argued ${request.stance === 'for' ? 'AGAINST' : 'FOR'}. This is a fundamental logical flaw. To fix this, you must [specific correction].'",` : '"STANCE ALIGNMENT: Since this is an opinion piece, evaluate if their logic is internally consistent.",'}
     "SPECIFIC weakness or strength: Quote their exact words from transcript, then explain the logical flaw or strength. Example: 'When you said \"[exact quote]\", this creates a logical gap because [specific reason]. To fix this, add: [exact improved version]'",
     "CONCRETE example: Identify the SPECIFIC premise that fails. Quote it. Explain why it fails. Provide exact replacement. Example: 'Your second premise \"[exact quote]\" lacks evidence. Add: \"According to [Source, Year], [statistic]% of [population] experience [effect].\" This strengthens your argument because [reason].'",
     "ACTIONABLE suggestion: Exact technique with word-for-word example. Example: 'Use causal chain reasoning: \"Because [their claim], and because [supporting fact], therefore [conclusion].\" Insert this at [specific location in speech] to connect premise A to conclusion B.'",

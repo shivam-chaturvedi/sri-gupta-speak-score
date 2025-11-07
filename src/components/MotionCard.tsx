@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Clock, Play, Mic, RotateCcw, LogIn } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -40,6 +40,12 @@ export function MotionCard({ motion, onStartSpeech, isLoggedIn = false }: Motion
     setSelectedStance("");
   }, [motion.id]); // Reset when motion ID changes
 
+  // Memoize whether this is a stance motion to prevent re-renders from hiding buttons
+  const isStanceMotion = useMemo(() => {
+    if (!motion || !motion.type) return false;
+    return motion.type === "stance";
+  }, [motion?.type, motion?.id]);
+
   const getCategoryColor = (category: string) => {
     const colors = {
       Politics: "bg-destructive",
@@ -59,9 +65,14 @@ export function MotionCard({ motion, onStartSpeech, isLoggedIn = false }: Motion
     onStartSpeech(
       motion, 
       selectedDuration, 
-      motion.type === "stance" ? selectedStance : undefined
+      isStanceMotion ? selectedStance : undefined
     );
   };
+
+  // Early return if motion is invalid
+  if (!motion || !motion.id) {
+    return null;
+  }
 
   return (
     <Card className="w-full max-w-md mx-auto bg-gradient-to-br from-speech-card to-speech-card/90 border-0 shadow-speech hover:shadow-glow transition-all duration-300 hover:scale-105">
@@ -71,7 +82,7 @@ export function MotionCard({ motion, onStartSpeech, isLoggedIn = false }: Motion
             {motion.category}
           </Badge>
           <Badge variant="outline" className="text-xs">
-            {motion.type === "stance" ? "For/Against" : "Opinion"}
+            {isStanceMotion ? "For/Against" : "Opinion"}
           </Badge>
         </div>
         <CardTitle className="text-lg font-bold leading-tight text-foreground">
@@ -85,8 +96,8 @@ export function MotionCard({ motion, onStartSpeech, isLoggedIn = false }: Motion
       </CardHeader>
 
       <CardContent className="space-y-4">
-        {motion && motion.type === "stance" ? (
-          <div className="space-y-2" key={`stance-${motion.id}`}>
+        {isStanceMotion ? (
+          <div className="space-y-2">
             <label className="text-sm font-medium text-foreground block">Choose your stance:</label>
             <div className="grid grid-cols-2 gap-2">
               <Button
@@ -99,7 +110,7 @@ export function MotionCard({ motion, onStartSpeech, isLoggedIn = false }: Motion
                 }}
                 className="h-8"
                 type="button"
-                key={`for-${motion.id}`}
+                aria-label="Select For stance"
               >
                 For
               </Button>
@@ -113,7 +124,7 @@ export function MotionCard({ motion, onStartSpeech, isLoggedIn = false }: Motion
                 }}
                 className="h-8"
                 type="button"
-                key={`against-${motion.id}`}
+                aria-label="Select Against stance"
               >
                 Against
               </Button>
@@ -148,7 +159,7 @@ export function MotionCard({ motion, onStartSpeech, isLoggedIn = false }: Motion
         {isLoggedIn ? (
           <Button
             onClick={handleStart}
-            disabled={motion.type === "stance" && !selectedStance}
+            disabled={isStanceMotion && !selectedStance}
             className="w-full bg-gradient-primary hover:opacity-90 transition-opacity border-0 text-white font-semibold py-3 h-12"
           >
             <Mic className="w-4 h-4 mr-2" />
@@ -158,7 +169,7 @@ export function MotionCard({ motion, onStartSpeech, isLoggedIn = false }: Motion
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button
-                disabled={motion.type === "stance" && !selectedStance}
+                disabled={isStanceMotion && !selectedStance}
                 className="w-full bg-gradient-primary hover:opacity-90 transition-opacity border-0 text-white font-semibold py-3 h-12"
               >
                 <Mic className="w-4 h-4 mr-2" />
