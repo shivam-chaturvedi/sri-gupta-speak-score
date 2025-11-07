@@ -113,13 +113,21 @@ export class AIService {
         console.error('API request failed:', response.status, response.statusText);
         console.error('Error response body:', errorText);
         
-        let errorMessage = `API request failed: ${response.status} ${response.statusText}`;
+        let errorMessage = `Analysis failed: ${response.status} ${response.statusText}`;
         
         try {
           const errorJson = JSON.parse(errorText);
           // Gemini API error format
           if (errorJson.error) {
             errorMessage = errorJson.error.message || errorJson.error.status || errorMessage;
+            // Check for specific error codes
+            if (errorJson.error.code === 401 || errorJson.error.code === 403) {
+              errorMessage = 'Invalid API key. Please check your Google Gemini API key and ensure it has the correct permissions.';
+            } else if (errorJson.error.code === 429) {
+              errorMessage = 'API rate limit exceeded. Please try again later.';
+            } else if (errorJson.error.code === 400) {
+              errorMessage = errorJson.error.message || 'Invalid request. Please check your input and try again.';
+            }
           } else if (errorJson.message) {
             errorMessage = errorJson.message;
           }
@@ -135,6 +143,10 @@ export class AIService {
           errorMessage = 'Invalid API key. Please check your Google Gemini API key and ensure it has the correct permissions.';
         } else if (response.status === 429) {
           errorMessage = 'API rate limit exceeded. Please try again later.';
+        } else if (response.status === 400) {
+          errorMessage = 'Invalid request. Please check your input and try again.';
+        } else if (response.status === 500 || response.status === 502 || response.status === 503) {
+          errorMessage = 'AI service is temporarily unavailable. Please try again in a few moments.';
         }
         
         throw new Error(errorMessage);
@@ -164,13 +176,22 @@ export class AIService {
       console.error('AI analysis failed:', error);
       // Provide more helpful error messages
       if (error instanceof Error) {
-        // Check if it's an API key issue
-        if (error.message.includes('API_KEY') || error.message.includes('401') || error.message.includes('403')) {
-          throw new Error('Invalid API key. Please check your Google Gemini API key.');
+        // Check if it's a network error
+        if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError') || error.message.includes('Network request failed')) {
+          throw new Error('Network error. Please check your internet connection and try again.');
         }
+        // Check if it's an API key issue
+        if (error.message.includes('API_KEY') || error.message.includes('401') || error.message.includes('403') || error.message.includes('Invalid API key')) {
+          throw new Error('Invalid API key. Please check your Google Gemini API key and ensure it has the correct permissions.');
+        }
+        // Check if it's a rate limit issue
+        if (error.message.includes('429') || error.message.includes('rate limit')) {
+          throw new Error('API rate limit exceeded. Please try again later.');
+        }
+        // Re-throw the error with its message
         throw error;
       }
-      throw new Error('AI analysis failed due to an unknown error');
+      throw new Error('AI analysis failed due to an unknown error. Please try again.');
     }
   }
 

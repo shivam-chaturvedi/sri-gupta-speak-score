@@ -1,0 +1,8 @@
+# Deno cache
+.deno/
+
+# Environment variables (never commit secrets!)
+.env
+.env.local
+
+

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Mic, Target, Trophy, Zap, Heart, Sparkles, Loader2, User } from "lucide-react";
+import { Mic, Target, Trophy, Zap, Heart, Sparkles, Loader2, User, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -13,6 +13,17 @@ import { aiService } from "@/services/aiService";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { Link } from "react-router-dom";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 type AppState = "home" | "recording" | "results";
 
@@ -218,14 +229,35 @@ const Index = () => {
                   Progress
                 </Button>
               </Link>
-              <Button
-                onClick={signOut}
-                variant="ghost"
-                size="sm"
-                className="text-white/80 hover:text-white hover:bg-white/20"
-              >
-                Sign Out
-              </Button>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-white/80 hover:text-white hover:bg-white/20 flex items-center gap-2"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    Sign Out
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Sign Out</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Are you sure you want to sign out? You'll need to sign in again to access your progress and continue practicing.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={signOut}
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    >
+                      Sign Out
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </div>
           ) : (
             <Link to="/login">
@@ -328,6 +360,7 @@ const Index = () => {
             <MotionCard 
               motion={dailyMotion} 
               onStartSpeech={handleStartSpeech}
+              isLoggedIn={!!user}
             />
           </div>
         )}
@@ -346,6 +379,7 @@ const Index = () => {
                 key={motion.id} 
                 motion={motion} 
                 onStartSpeech={handleStartSpeech}
+                isLoggedIn={!!user}
               />
             ))}
           </div>

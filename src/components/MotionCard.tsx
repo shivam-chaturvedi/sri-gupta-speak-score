@@ -1,8 +1,20 @@
 import { useState } from "react";
-import { Clock, Play, Mic, RotateCcw } from "lucide-react";
+import { Clock, Play, Mic, RotateCcw, LogIn } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Link } from "react-router-dom";
 
 interface Motion {
   id: string;
@@ -15,9 +27,10 @@ interface Motion {
 interface MotionCardProps {
   motion: Motion;
   onStartSpeech: (motion: Motion, duration: number, stance?: string) => void;
+  isLoggedIn?: boolean;
 }
 
-export function MotionCard({ motion, onStartSpeech }: MotionCardProps) {
+export function MotionCard({ motion, onStartSpeech, isLoggedIn = false }: MotionCardProps) {
   const [selectedStance, setSelectedStance] = useState<string>("");
   const [selectedDuration, setSelectedDuration] = useState<number>(60);
 
@@ -34,6 +47,9 @@ export function MotionCard({ motion, onStartSpeech }: MotionCardProps) {
   };
 
   const handleStart = () => {
+    if (!isLoggedIn) {
+      return; // Don't proceed if not logged in
+    }
     onStartSpeech(
       motion, 
       selectedDuration, 
@@ -111,14 +127,45 @@ export function MotionCard({ motion, onStartSpeech }: MotionCardProps) {
           </div>
         </div>
 
-        <Button
-          onClick={handleStart}
-          disabled={motion.type === "stance" && !selectedStance}
-          className="w-full bg-gradient-primary hover:opacity-90 transition-opacity border-0 text-white font-semibold py-3 h-12"
-        >
-          <Mic className="w-4 h-4 mr-2" />
-          Start Speaking
-        </Button>
+        {isLoggedIn ? (
+          <Button
+            onClick={handleStart}
+            disabled={motion.type === "stance" && !selectedStance}
+            className="w-full bg-gradient-primary hover:opacity-90 transition-opacity border-0 text-white font-semibold py-3 h-12"
+          >
+            <Mic className="w-4 h-4 mr-2" />
+            Start Speaking
+          </Button>
+        ) : (
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                disabled={motion.type === "stance" && !selectedStance}
+                className="w-full bg-gradient-primary hover:opacity-90 transition-opacity border-0 text-white font-semibold py-3 h-12"
+              >
+                <Mic className="w-4 h-4 mr-2" />
+                Start Speaking
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Login Required</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Please login first to start practicing. You need to be logged in to save your progress and track your achievements.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction asChild>
+                  <Link to="/login" className="flex items-center gap-2">
+                    <LogIn className="w-4 h-4" />
+                    Go to Login
+                  </Link>
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        )}
       </CardContent>
     </Card>
   );

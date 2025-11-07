@@ -7,9 +7,9 @@ import { Progress as ProgressBar } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Trophy, Calendar, Star, Target, Zap, TrendingUp, Award, Crown } from 'lucide-react';
+import { Trophy, Calendar, Star, Target, Zap, TrendingUp, Award, Crown, ArrowLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { Navigate } from 'react-router-dom';
+import { Navigate, Link } from 'react-router-dom';
 
 interface UserProgress {
   total_points: number;
@@ -157,21 +157,63 @@ const Progress = () => {
   };
 
   const updateProgressFromSessions = async (sessions: any[]) => {
-    if (sessions.length === 0) return;
+    if (sessions.length === 0 || !user) return;
 
     const totalTimeSpent = sessions.reduce((sum, s) => sum + (s.duration || 0), 0);
     const totalPoints = sessions.length * 10; // Base points per session
+    
+    // Calculate streak
+    const today = new Date().toISOString().split('T')[0];
+    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+    
+    // Get last activity date from progress
+    const { data: currentProgress } = await supabase
+      .from('user_progress')
+      .select('last_activity_date, current_streak, longest_streak')
+      .eq('user_id', user.id)
+      .single();
+
+    let newStreak = currentProgress?.current_streak || 0;
+    let longestStreak = currentProgress?.longest_streak || 0;
+    const lastActivity = currentProgress?.last_activity_date;
+
+    // Update streak logic
+    if (lastActivity === yesterday) {
+      // Continue streak
+      newStreak = (newStreak || 0) + 1;
+    } else if (lastActivity === today) {
+      // Already updated today, keep current streak
+      newStreak = newStreak || 0;
+    } else if (lastActivity && lastActivity < yesterday) {
+      // Streak broken, reset to 1
+      newStreak = 1;
+    } else {
+      // First activity, start streak
+      newStreak = 1;
+    }
+
+    // Update longest streak if needed
+    if (newStreak > longestStreak) {
+      longestStreak = newStreak;
+    }
 
     const { error } = await supabase
       .from('user_progress')
       .update({
         total_time_spent: totalTimeSpent,
-        total_points: totalPoints
+        total_points: totalPoints,
+        current_streak: newStreak,
+        longest_streak: longestStreak,
+        last_activity_date: today,
+        updated_at: new Date().toISOString()
       })
-      .eq('user_id', user!.id);
+      .eq('user_id', user.id);
 
     if (error) {
       console.error('Error updating progress:', error);
+    } else {
+      // Refresh progress data
+      await fetchProgressData();
     }
   };
 
@@ -222,6 +264,17 @@ const Progress = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-background to-secondary/20">
       <div className="container mx-auto px-4 py-8">
+        {/* Back to Home Button */}
+        <Link to="/">
+          <Button
+            variant="ghost"
+            className="mb-6 flex items-center gap-2"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back to Home
+          </Button>
+        </Link>
+
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center gap-4 mb-6">

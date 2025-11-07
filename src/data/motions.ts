@@ -50,7 +50,7 @@ export const motions: Motion[] = [
     topic: "Is lying ever morally justified?",
     category: "Ethics",
     description: "Examine white lies, protection, and absolute moral principles",
-    type: "opinion"
+    type: "stance"
   },
 
   // Education

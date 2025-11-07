@@ -16,4 +16,10 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  // Ensure public folder is served correctly for model files
+  publicDir: 'public',
+  // Increase chunk size limit for large model files
+  build: {
+    chunkSizeWarningLimit: 1000,
+  },
 });

@@ -48,9 +48,24 @@ const Login = () => {
       const { error } = await signIn(data.email, data.password)
       
       if (error) {
+        console.error('Login error:', error)
+        let errorMessage = "Invalid email or password. Please try again."
+        
+        if (error.message) {
+          if (error.message.includes('Invalid login credentials')) {
+            errorMessage = "Invalid email or password. Please check your credentials and try again."
+          } else if (error.message.includes('Email not confirmed')) {
+            errorMessage = "Please verify your email address before signing in."
+          } else if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+            errorMessage = "Network error. Please check your internet connection and try again."
+          } else {
+            errorMessage = error.message
+          }
+        }
+        
         toast({
           title: "Authentication Failed",
-          description: error.message || "Invalid email or password. Please try again.",
+          description: errorMessage,
           variant: "destructive",
         })
       } else {
@@ -66,9 +81,14 @@ const Login = () => {
         navigate('/')
       }
     } catch (error) {
+      console.error('Login exception:', error)
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : "Unable to connect to authentication service. Please check your internet connection and try again."
+      
       toast({
         title: "Connection Error",
-        description: "Unable to connect to authentication service. Please try again.",
+        description: errorMessage,
         variant: "destructive",
       })
     } finally {

@@ -1,7 +1,9 @@
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, Link } from "react-router-dom";
 import { ScoreDisplay } from "@/components/ScoreDisplay";
 import { getDailyMotion, getRandomMotions, type Motion } from "@/data/motions";
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { ArrowLeft } from "lucide-react";
 
 const Results = () => {
   const location = useLocation();
@@ -38,6 +40,17 @@ const Results = () => {
 
   return (
     <div className="min-h-screen bg-speech-bg p-4 py-8">
+      <div className="max-w-6xl mx-auto mb-6">
+        <Link to="/">
+          <Button
+            variant="ghost"
+            className="flex items-center gap-2"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back to Home
+          </Button>
+        </Link>
+      </div>
       <ScoreDisplay
         motion={motion}
         stance={stance}

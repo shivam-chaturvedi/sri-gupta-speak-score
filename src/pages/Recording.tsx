@@ -5,10 +5,13 @@ import type { Motion } from "@/data/motions";
 import { generateMockScore } from "@/utils/mockScoring";
 import { aiService } from "@/services/aiService";
 import { toast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 
 const Recording = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { user } = useAuth();
   
   // Get motion, duration, and stance from navigation state
   const motion: Motion = location.state?.motion;
@@ -60,6 +63,10 @@ const Recording = () => {
         };
         
         setScoreData(resultsWithTranscript);
+        
+        // Save session to Supabase
+        await saveSessionToSupabase(resultsWithTranscript, cleanTranscript);
+        
         navigate("/results", { 
           state: { 
             motion, 
@@ -78,15 +85,20 @@ const Recording = () => {
         
         // Fallback to mock scoring
         const results = generateMockScore(audioBlob, motion.topic, stance, cleanTranscript);
-        setScoreData(results);
+        const resultsWithTranscript = {
+          ...results,
+          transcript: cleanTranscript
+        };
+        setScoreData(resultsWithTranscript);
+        
+        // Save session to Supabase
+        await saveSessionToSupabase(resultsWithTranscript, cleanTranscript);
+        
         navigate("/results", { 
           state: { 
             motion, 
             stance, 
-            results: {
-              ...results,
-              transcript: cleanTranscript
-            },
+            results: resultsWithTranscript,
             transcript: cleanTranscript 
           }
         });
@@ -119,15 +131,20 @@ const Recording = () => {
         });
         // Fallback to mock scoring if limited transcript
         const results = generateMockScore(audioBlob, motion.topic, stance, cleanTranscript);
-        setScoreData(results);
+        const resultsWithTranscript = {
+          ...results,
+          transcript: cleanTranscript
+        };
+        setScoreData(resultsWithTranscript);
+        
+        // Save session to Supabase
+        await saveSessionToSupabase(resultsWithTranscript, cleanTranscript);
+        
         navigate("/results", { 
           state: { 
             motion, 
             stance, 
-            results: {
-              ...results,
-              transcript: cleanTranscript
-            },
+            results: resultsWithTranscript,
             transcript: cleanTranscript 
           }
         });
@@ -137,6 +154,44 @@ const Recording = () => {
 
   const handleBack = () => {
     navigate("/");
+  };
+
+  const saveSessionToSupabase = async (results: any, transcript: string) => {
+    if (!user) {
+      console.log('User not logged in, skipping Supabase save');
+      return;
+    }
+
+    try {
+      const sessionData = {
+        user_id: user.id,
+        motion_id: motion.id,
+        motion_topic: motion.topic,
+        stance: stance || null,
+        duration: duration,
+        transcript: transcript || null,
+        score_logic: results.score?.logic || null,
+        score_rhetoric: results.score?.rhetoric || null,
+        score_empathy: results.score?.empathy || null,
+        score_delivery: results.score?.delivery || null,
+        overall_score: results.score?.total || null,
+        feedback: results.enhancedFeedback || null
+      };
+
+      const { error } = await supabase
+        .from('debate_sessions')
+        .insert(sessionData);
+
+      if (error) {
+        console.error('Error saving session to Supabase:', error);
+        // Don't show error to user, just log it
+      } else {
+        console.log('✅ Session saved to Supabase successfully');
+      }
+    } catch (error) {
+      console.error('Error saving session:', error);
+      // Don't show error to user, just log it
+    }
   };
 
   return (

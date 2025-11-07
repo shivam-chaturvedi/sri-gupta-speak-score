@@ -51,19 +51,26 @@ const Signup = () => {
       const { error } = await signUp(data.email, data.password)
       
       if (error) {
-        if (error.message.includes('already registered')) {
-          toast({
-            title: "Account Already Exists",
-            description: "An account with this email already exists. Please try signing in instead.",
-            variant: "destructive",
-          })
-        } else {
-          toast({
-            title: "Registration Failed",
-            description: error.message || "Unable to create account. Please try again.",
-            variant: "destructive",
-          })
+        console.error('Signup error:', error)
+        let errorMessage = "Unable to create account. Please try again."
+        
+        if (error.message) {
+          if (error.message.includes('already registered') || error.message.includes('already exists') || error.message.includes('User already registered')) {
+            errorMessage = "An account with this email already exists. Please try signing in instead."
+          } else if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+            errorMessage = "Network error. Please check your internet connection and try again."
+          } else if (error.message.includes('Password')) {
+            errorMessage = error.message
+          } else {
+            errorMessage = error.message
+          }
         }
+        
+        toast({
+          title: error.message?.includes('already') ? "Account Already Exists" : "Registration Failed",
+          description: errorMessage,
+          variant: "destructive",
+        })
       } else {
         toast({
           title: "Account Created Successfully!",
@@ -74,9 +81,14 @@ const Signup = () => {
         navigate('/')
       }
     } catch (error) {
+      console.error('Signup exception:', error)
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : "Unable to connect to registration service. Please check your internet connection and try again."
+      
       toast({
         title: "Connection Error",
-        description: "Unable to connect to registration service. Please try again.",
+        description: errorMessage,
         variant: "destructive",
       })
     } finally {
