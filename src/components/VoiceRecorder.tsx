@@ -43,6 +43,7 @@ export function VoiceRecorder({
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [usingAssemblyAIFallback, setUsingAssemblyAIFallback] = useState(false);
   const [showTranscribeButton, setShowTranscribeButton] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -357,6 +358,7 @@ export function VoiceRecorder({
         setAudioBlob(blob);
         setAudioUrl(URL.createObjectURL(blob));
         setIsCompleted(true);
+        setIsProcessing(true); // Show loader while processing
         stream.getTracks().forEach(track => track.stop());
         
         // Wait a bit more to ensure final results are captured
@@ -397,14 +399,17 @@ export function VoiceRecorder({
         if (cleanTranscript && cleanTranscript.length > 0) {
           updateTranscript(cleanTranscript);
           console.log('✅ Browser transcript captured successfully:', cleanTranscript.substring(0, 100));
+          setIsProcessing(false); // Stop loader
         } else if (recognitionTranscriptRef.current.trim().length > 0) {
           // Double check - if recognitionTranscript has content, use it
           updateTranscript(recognitionTranscriptRef.current.trim());
           console.log('✅ Using recognitionTranscript:', recognitionTranscriptRef.current.trim().substring(0, 100));
+          setIsProcessing(false); // Stop loader
         } else if (transcriptRef.current.trim().length > 0 && !transcriptRef.current.includes("No transcript")) {
           // Triple check - if current transcript state has content, use it
           updateTranscript(transcriptRef.current.trim());
           console.log('✅ Using current transcript state:', transcriptRef.current.trim().substring(0, 100));
+          setIsProcessing(false); // Stop loader
         } else {
           // Webkit speech recognition FAILED (no transcript) - show transcribe button to use AssemblyAI
           // Only show button if webkit was attempted (supported) but failed, OR if webkit is not supported
@@ -420,6 +425,7 @@ export function VoiceRecorder({
             console.log('⚠️ No transcript but webkit status unclear');
             updateTranscript("No transcript captured. Please try recording again.");
           }
+          setIsProcessing(false); // Stop loader
         }
       };
 
@@ -596,6 +602,8 @@ export function VoiceRecorder({
     setAudioUrl("");
     setIsCompleted(false);
     setShowLoader(false);
+    setIsProcessing(false);
+    setIsTranscribing(false);
     updateTranscript("");
     updateRecognitionTranscript("");
     updateCurrentTranscript("");
@@ -830,8 +838,19 @@ export function VoiceRecorder({
                 </Button>
               </div>
               
-              {/* Show Transcribe button if no transcript and not currently transcribing */}
-              {showTranscribeButton && !isTranscribing && (
+              {/* Show loader while processing after recording */}
+              {isProcessing && (
+                <Button
+                  disabled
+                  className="w-full bg-gradient-primary hover:opacity-90 border-0 text-white font-semibold py-3 h-12"
+                >
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Processing...
+                </Button>
+              )}
+              
+              {/* Show Transcribe button if no transcript and not currently transcribing or processing */}
+              {!isProcessing && showTranscribeButton && !isTranscribing && (
                 <Button
                   onClick={handleTranscribe}
                   className="w-full bg-gradient-primary hover:opacity-90 border-0 text-white font-semibold py-3 h-12"
@@ -842,7 +861,7 @@ export function VoiceRecorder({
               )}
               
               {/* Show loader while transcribing */}
-              {isTranscribing && (
+              {!isProcessing && isTranscribing && (
                 <Button
                   disabled
                   className="w-full bg-gradient-primary hover:opacity-90 border-0 text-white font-semibold py-3 h-12"
@@ -852,8 +871,8 @@ export function VoiceRecorder({
                 </Button>
               )}
               
-              {/* Show Get My Score button only if we have a transcript */}
-              {!showTranscribeButton && !isTranscribing && transcript.trim().length > 0 && (
+              {/* Show Get My Score button only if we have a transcript and not processing */}
+              {!isProcessing && !showTranscribeButton && !isTranscribing && transcript.trim().length > 0 && (
                 !showLoader ? (
                   <Button
                     onClick={submitRecording}
