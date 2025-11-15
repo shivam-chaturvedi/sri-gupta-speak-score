@@ -24,8 +24,8 @@ const Home = () => {
   const navigate = useNavigate();
   const [selectedTheme, setSelectedTheme] = useState<string>("All Themes");
   const [motions, setMotions] = useState(() => {
-    const daily = getDailyMotion();
-    const random = getRandomMotions(2);
+    const daily = getDailyMotion({ stanceOnly: true });
+    const random = getRandomMotions(2, { stanceOnly: true });
     return [daily, ...random];
   });
 
@@ -239,8 +239,8 @@ const Home = () => {
         <div className="text-center">
           <Button
             onClick={() => {
-              const daily = getDailyMotion();
-              const random = getRandomMotions(2);
+              const daily = getDailyMotion({ stanceOnly: true });
+              const random = getRandomMotions(2, { stanceOnly: true });
               setMotions([daily, ...random]);
               setSelectedTheme("All Themes");
             }}
@@ -295,4 +295,3 @@ const Home = () => {
 };
 
 export default Home;
-

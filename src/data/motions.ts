@@ -146,13 +146,38 @@ export const motions: Motion[] = [
   }
 ];
 
-export function getDailyMotion(): Motion {
-  const today = new Date();
-  const dayOfYear = Math.floor((today.getTime() - new Date(today.getFullYear(), 0, 0).getTime()) / 86400000);
-  return motions[dayOfYear % motions.length];
+const stanceMotions = motions.filter(
+  (motion) => (motion.type ?? "").trim().toLowerCase() === "stance"
+);
+
+interface MotionSelectionOptions {
+  stanceOnly?: boolean;
 }
 
-export function getRandomMotions(count: number = 3): Motion[] {
-  const shuffled = [...motions].sort(() => 0.5 - Math.random());
-  return shuffled.slice(0, count);
+export function getDailyMotion(options?: MotionSelectionOptions): Motion {
+  const useStanceOnly = options?.stanceOnly && stanceMotions.length > 0;
+  const sourceMotions = useStanceOnly ? stanceMotions : motions;
+  const today = new Date();
+  const dayOfYear = Math.floor(
+    (today.getTime() - new Date(today.getFullYear(), 0, 0).getTime()) / 86400000
+  );
+  return sourceMotions[dayOfYear % sourceMotions.length];
+}
+
+export function getRandomMotions(
+  count: number = 3,
+  options?: MotionSelectionOptions
+): Motion[] {
+  let sourcePool =
+    options?.stanceOnly && stanceMotions.length > 0 ? stanceMotions : motions;
+
+  if (options?.stanceOnly && sourcePool.length < count) {
+    const fallbackMotions = motions.filter(
+      (motion) => !stanceMotions.includes(motion)
+    );
+    sourcePool = [...sourcePool, ...fallbackMotions];
+  }
+
+  const shuffled = [...sourcePool].sort(() => 0.5 - Math.random());
+  return shuffled.slice(0, Math.min(count, shuffled.length));
 }

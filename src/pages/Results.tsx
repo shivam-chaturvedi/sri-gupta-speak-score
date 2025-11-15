@@ -13,8 +13,8 @@ const Results = () => {
   const stance: string | undefined = location.state?.stance;
   const scoreData = location.state?.results;
   const [motions, setMotions] = useState(() => {
-    const daily = getDailyMotion();
-    const random = getRandomMotions(2);
+    const daily = getDailyMotion({ stanceOnly: true });
+    const random = getRandomMotions(2, { stanceOnly: true });
     return [daily, ...random];
   });
 
@@ -32,8 +32,8 @@ const Results = () => {
 
   const handleNewTopic = () => {
     // Generate new random motions
-    const daily = getDailyMotion();
-    const random = getRandomMotions(2);
+    const daily = getDailyMotion({ stanceOnly: true });
+    const random = getRandomMotions(2, { stanceOnly: true });
     setMotions([daily, ...random]);
     navigate("/");
   };
@@ -68,4 +68,3 @@ const Results = () => {
 };
 
 export default Results;
-

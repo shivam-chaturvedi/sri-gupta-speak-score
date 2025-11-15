@@ -61,7 +61,7 @@ interface SpeechAnalysisRequest {
 }
 
 export class AIService {
-  private apiKey: string = "AIzaSyCTCIx4gdJmRQ6iGN6gj89NCtsAjeRY7uU";
+  private apiKey: string = "AIzaSyBscWNBOsm520KHCKeUdT7LlLOtXSsf2VI";
 
   constructor() {
     // API key is hardcoded
@@ -79,9 +79,9 @@ export class AIService {
     const prompt = this.buildAnalysisPrompt(request);
 
     try {
-      // Use Gemini 2.5 Flash model with header-based authentication
-      const apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
-      console.log('Calling Gemini 2.5 Flash API...');
+      // Use Gemini 2.0 Flash model with header-based authentication
+      const apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
+      console.log('Calling Gemini 2.0 Flash API...');
       
       const response = await fetch(apiUrl, {
         method: 'POST',
@@ -142,11 +142,11 @@ export class AIService {
         } else if (response.status === 401 || response.status === 403) {
           errorMessage = 'Invalid API key. Please check your Google Gemini API key and ensure it has the correct permissions.';
         } else if (response.status === 429) {
-          errorMessage = 'API rate limit exceeded. Please try again later.';
+          errorMessage = 'Gemini limit exhausted. Please wait a moment and try the analysis again.';
         } else if (response.status === 400) {
           errorMessage = 'Invalid request. Please check your input and try again.';
         } else if (response.status === 500 || response.status === 502 || response.status === 503) {
-          errorMessage = 'AI service is temporarily unavailable. Please try again in a few moments.';
+          errorMessage = 'Gemini is not available right now. Please restart your speech and try again shortly.';
         }
         
         throw new Error(errorMessage);
@@ -185,8 +185,8 @@ export class AIService {
           throw new Error('Invalid API key. Please check your Google Gemini API key and ensure it has the correct permissions.');
         }
         // Check if it's a rate limit issue
-        if (error.message.includes('429') || error.message.includes('rate limit')) {
-          throw new Error('API rate limit exceeded. Please try again later.');
+        if (error.message.includes('429') || error.message.includes('rate limit') || error.message.includes('limit exhausted')) {
+          throw new Error('Gemini limit exhausted. Please wait a bit and try the analysis again.');
         }
         // Re-throw the error with its message
         throw error;

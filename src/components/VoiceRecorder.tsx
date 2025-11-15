@@ -3,8 +3,13 @@ import { Mic, MicOff, Play, Pause, RotateCcw, CheckCircle, Loader2 } from "lucid
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { toast } from "@/hooks/use-toast";
 import { transcribeWithAssemblyAI, isAssemblyAIAvailable } from "@/services/assemblyAITranscription";
+
+interface RecorderNotice {
+  tone: 'error' | 'info';
+  title: string;
+  description?: string;
+}
 
 interface VoiceRecorderProps {
   motion: {
@@ -44,6 +49,7 @@ export function VoiceRecorder({
   const [usingAssemblyAIFallback, setUsingAssemblyAIFallback] = useState(false);
   const [showTranscribeButton, setShowTranscribeButton] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [recorderNotice, setRecorderNotice] = useState<RecorderNotice | null>(null);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -53,6 +59,18 @@ export function VoiceRecorder({
   const recognitionTranscriptRef = useRef("");
   const currentTranscriptRef = useRef("");
   const isRecordingRef = useRef(false);
+
+  const showRecorderNotice = (tone: RecorderNotice['tone'], title: string, description?: string) => {
+    setRecorderNotice({ tone, title, description });
+  };
+
+  const showErrorNotice = (title: string, description?: string) =>
+    showRecorderNotice('error', title, description);
+
+  const showInfoNotice = (title: string, description?: string) =>
+    showRecorderNotice('info', title, description);
+
+  const dismissRecorderNotice = () => setRecorderNotice(null);
 
   const updateTranscript = (value: string) => {
     transcriptRef.current = value;
@@ -87,17 +105,15 @@ export function VoiceRecorder({
       // Check AssemblyAI availability
       const assemblyAIAvailable = isAssemblyAIAvailable();
       if (assemblyAIAvailable) {
-        toast({
-          title: "Using AssemblyAI Transcription",
-          description: "Your browser doesn't support native speech recognition. Audio will be transcribed using AssemblyAI after recording.",
-          variant: "default",
-        });
+        showInfoNotice(
+          "Using AssemblyAI Transcription",
+          "Your browser doesn't support native speech recognition. Audio will be transcribed using AssemblyAI after recording."
+        );
       } else {
-        toast({
-          title: "Transcription Limited",
-          description: "Your browser doesn't support speech recognition. Audio will be recorded but transcription may not be available.",
-          variant: "default",
-        });
+        showInfoNotice(
+          "Transcription Limited",
+          "Your browser doesn't support speech recognition. Audio will be recorded but transcription may not be available."
+        );
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -163,11 +179,10 @@ export function VoiceRecorder({
         if (event.error === 'not-allowed') {
           console.error('Microphone permission denied for speech recognition');
           setUsingAssemblyAIFallback(true); // Use AssemblyAI as fallback
-          toast({
-            title: "Using AssemblyAI Fallback",
-            description: "Microphone permission denied for live transcription. Will use AssemblyAI to transcribe after recording.",
-            variant: "default",
-          });
+          showInfoNotice(
+            "Using AssemblyAI Fallback",
+            "Microphone permission denied for live transcription. Audio will be transcribed after recording."
+          );
           setPermissionChecked(true);
         } else if (event.error === 'no-speech') {
           console.log('No speech detected (this is normal during pauses)');
@@ -179,27 +194,24 @@ export function VoiceRecorder({
           }
         } else if (event.error === 'network') {
           setUsingAssemblyAIFallback(true); // Use AssemblyAI as fallback
-          toast({
-            title: "Using AssemblyAI Fallback",
-            description: "Network error with speech recognition. Will use AssemblyAI to transcribe after recording.",
-            variant: "default",
-          });
+          showInfoNotice(
+            "Using AssemblyAI Fallback",
+            "Network error with speech recognition. Audio will be transcribed after recording."
+          );
         } else if (event.error === 'service-not-allowed') {
           setUsingAssemblyAIFallback(true); // Use AssemblyAI as fallback
-          toast({
-            title: "Using AssemblyAI Fallback",
-            description: "Speech recognition service not available. Will use AssemblyAI to transcribe after recording.",
-            variant: "default",
-          });
+          showInfoNotice(
+            "Using AssemblyAI Fallback",
+            "Speech recognition service not available. Audio will be transcribed after recording."
+          );
         } else {
           console.error('Speech recognition error:', event.error);
           // For other errors, enable AssemblyAI fallback
           setUsingAssemblyAIFallback(true);
-          toast({
-            title: "Using AssemblyAI Fallback",
-            description: `Speech recognition error: ${event.error}. Will use AssemblyAI to transcribe after recording.`,
-            variant: "default",
-          });
+          showInfoNotice(
+            "Using AssemblyAI Fallback",
+            `Speech recognition error: ${event.error}. Audio will be transcribed after recording.`
+          );
         }
       };
       
@@ -244,11 +256,10 @@ export function VoiceRecorder({
   // Handle transcription button click
   const handleTranscribe = async () => {
     if (!audioBlob) {
-      toast({
-        title: "No Audio",
-        description: "Please record audio first.",
-        variant: "destructive",
-      });
+      showErrorNotice(
+        "No Audio",
+        "Please record audio first."
+      );
       return;
     }
 
@@ -264,11 +275,7 @@ export function VoiceRecorder({
         updateTranscript(transcript);
         updateRecognitionTranscript(transcript);
         console.log('✅ AssemblyAI transcription successful, length:', transcript.length);
-        toast({
-          title: "Transcription Complete",
-          description: "Your speech has been transcribed successfully.",
-          variant: "default",
-        });
+        showInfoNotice("Transcription Complete", "Your speech has been transcribed successfully.");
       } else {
         throw new Error('No transcript returned from AssemblyAI');
       }
@@ -276,11 +283,7 @@ export function VoiceRecorder({
       console.error('❌ AssemblyAI transcription failed:', error);
       const errorMessage = error?.message || 'Unknown error';
       updateTranscript("Transcription failed. Please try again.");
-      toast({
-        title: "Transcription Failed",
-        description: `Could not transcribe audio: ${errorMessage}`,
-        variant: "destructive",
-      });
+      showErrorNotice("Transcription Failed", `Could not transcribe audio: ${errorMessage}`);
       setShowTranscribeButton(true); // Show button again to retry
     } finally {
       setIsTranscribing(false);
@@ -305,11 +308,10 @@ export function VoiceRecorder({
       console.log('Speech recognition permission check:', error);
       // If it's a permission error, we'll handle it in onerror
       if (error.name === 'NotAllowedError' || error.message?.includes('not-allowed')) {
-        toast({
-          title: "Speech Recognition Permission Required",
-          description: "Please allow microphone access for speech transcription. Your browser will ask for permission.",
-          variant: "destructive",
-        });
+        showErrorNotice(
+          "Speech Recognition Permission Required",
+          "Please allow microphone access for speech transcription. Your browser will ask for permission."
+        );
         return false;
       }
       // Other errors might be okay (like already started)
@@ -440,11 +442,10 @@ export function VoiceRecorder({
         } catch (error: any) {
           console.error('Speech recognition start error:', error);
           if (error.name === 'NotAllowedError' || error.message?.includes('not-allowed')) {
-            toast({
-              title: "Transcription Permission Denied",
-              description: "Microphone permission for transcription was denied. Audio will be recorded, but transcription may not work. Please allow microphone access in your browser settings.",
-              variant: "destructive",
-            });
+            showErrorNotice(
+              "Transcription Permission Denied",
+              "Microphone permission for transcription was denied. Audio will be recorded, but transcription may not work. Please allow microphone access in your browser settings."
+            );
             // Will use AssemblyAI fallback after recording
             if (isAssemblyAIAvailable()) {
               setUsingAssemblyAIFallback(true);
@@ -473,11 +474,10 @@ export function VoiceRecorder({
           setUsingAssemblyAIFallback(true);
           console.log('🔄 Will use AssemblyAI fallback for transcription');
         } else {
-          toast({
-            title: "Transcription Not Available",
-            description: "Speech recognition is not supported in your browser. Audio will be recorded but transcription may not be available.",
-            variant: "default",
-          });
+          showInfoNotice(
+            "Transcription Not Available",
+            "Speech recognition is not supported in your browser. Audio will be recorded but transcription may not be available."
+          );
         }
       }
 
@@ -537,11 +537,7 @@ export function VoiceRecorder({
         errorMessage = "Microphone is being used by another application. Please close other apps using the microphone and try again.";
       }
       
-      toast({
-        title: "Microphone Access Required",
-        description: errorMessage,
-        variant: "destructive",
-      });
+      showErrorNotice("Microphone Access Required", errorMessage);
     }
   };
 
@@ -557,11 +553,7 @@ export function VoiceRecorder({
 
   const playAudio = async () => {
     if (!audioRef.current || !audioUrl) {
-      toast({
-        title: "No audio available",
-        description: "Please record audio first.",
-        variant: "destructive",
-      });
+      showErrorNotice("No audio available", "Please record audio first.");
       return;
     }
 
@@ -583,11 +575,7 @@ export function VoiceRecorder({
       }
     } catch (error) {
       console.error('Audio playback error:', error);
-      toast({
-        title: "Playback failed",
-        description: "Could not play audio. Try recording again.",
-        variant: "destructive",
-      });
+      showErrorNotice("Playback failed", "Could not play audio. Try recording again.");
     }
   };
 
@@ -622,11 +610,10 @@ export function VoiceRecorder({
       
       // If still transcribing, wait a bit and try to get the transcript
       if (isTranscribing) {
-        toast({
-          title: "Please Wait",
-          description: "Transcription is still in progress. Please wait a moment...",
-          variant: "default",
-        });
+        showInfoNotice(
+          "Please Wait",
+          "Transcription is still in progress. Please wait a moment..."
+        );
         
         // Wait up to 10 seconds for transcription to complete
         let waitCount = 0;
@@ -712,6 +699,33 @@ export function VoiceRecorder({
       </CardHeader>
 
       <CardContent className="space-y-6">
+        {recorderNotice && (
+          <div
+            className={`rounded-2xl border p-4 ${
+              recorderNotice.tone === 'error'
+                ? 'border-destructive/40 bg-destructive/10 text-destructive-foreground'
+                : 'border-primary/30 bg-primary/10 text-primary'
+            }`}
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="font-semibold">{recorderNotice.title}</p>
+                {recorderNotice.description && (
+                  <p className="text-sm opacity-80 mt-1">
+                    {recorderNotice.description}
+                  </p>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={dismissRecorderNotice}
+                className="text-sm font-medium opacity-75 hover:opacity-100"
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        )}
         {/* Progress Bar */}
         <div className="space-y-2">
           <div className="flex justify-between text-sm">
@@ -912,11 +926,7 @@ export function VoiceRecorder({
             onEnded={() => setIsPlaying(false)}
             onError={(e) => {
               console.error('Audio element error:', e);
-              toast({
-                title: "Audio error",
-                description: "Error loading audio file.",
-                variant: "destructive",
-              });
+              showErrorNotice("Audio error", "Error loading audio file.");
             }}
             className="hidden"
           />
