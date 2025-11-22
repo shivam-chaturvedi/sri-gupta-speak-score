@@ -23,16 +23,19 @@ CREATE TABLE IF NOT EXISTS public.profiles (
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies for profiles
+DROP POLICY IF EXISTS "Users can view their own profile" ON public.profiles;
 CREATE POLICY "Users can view their own profile" 
 ON public.profiles 
 FOR SELECT 
 USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can update their own profile" ON public.profiles;
 CREATE POLICY "Users can update their own profile" 
 ON public.profiles 
 FOR UPDATE 
 USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can insert their own profile" ON public.profiles;
 CREATE POLICY "Users can insert their own profile" 
 ON public.profiles 
 FOR INSERT 
@@ -63,21 +66,25 @@ CREATE TABLE IF NOT EXISTS public.debate_sessions (
 ALTER TABLE public.debate_sessions ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies for debate_sessions
+DROP POLICY IF EXISTS "Users can view their own sessions" ON public.debate_sessions;
 CREATE POLICY "Users can view their own sessions" 
 ON public.debate_sessions 
 FOR SELECT 
 USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can insert their own sessions" ON public.debate_sessions;
 CREATE POLICY "Users can insert their own sessions" 
 ON public.debate_sessions 
 FOR INSERT 
 WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can update their own sessions" ON public.debate_sessions;
 CREATE POLICY "Users can update their own sessions" 
 ON public.debate_sessions 
 FOR UPDATE 
 USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can delete their own sessions" ON public.debate_sessions;
 CREATE POLICY "Users can delete their own sessions" 
 ON public.debate_sessions 
 FOR DELETE 
@@ -104,16 +111,19 @@ CREATE TABLE IF NOT EXISTS public.user_progress (
 ALTER TABLE public.user_progress ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies for user_progress
+DROP POLICY IF EXISTS "Users can view their own progress" ON public.user_progress;
 CREATE POLICY "Users can view their own progress" 
 ON public.user_progress 
 FOR SELECT 
 USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can insert their own progress" ON public.user_progress;
 CREATE POLICY "Users can insert their own progress" 
 ON public.user_progress 
 FOR INSERT 
 WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can update their own progress" ON public.user_progress;
 CREATE POLICY "Users can update their own progress" 
 ON public.user_progress 
 FOR UPDATE 
@@ -138,6 +148,7 @@ CREATE TABLE IF NOT EXISTS public.achievement_badges (
 ALTER TABLE public.achievement_badges ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies for achievement_badges (public read access)
+DROP POLICY IF EXISTS "Anyone can view achievement badges" ON public.achievement_badges;
 CREATE POLICY "Anyone can view achievement badges" 
 ON public.achievement_badges 
 FOR SELECT 
@@ -160,11 +171,13 @@ CREATE TABLE IF NOT EXISTS public.user_achievement_badges (
 ALTER TABLE public.user_achievement_badges ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies for user_achievement_badges
+DROP POLICY IF EXISTS "Users can view their own badges" ON public.user_achievement_badges;
 CREATE POLICY "Users can view their own badges" 
 ON public.user_achievement_badges 
 FOR SELECT 
 USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can insert their own badges" ON public.user_achievement_badges;
 CREATE POLICY "Users can insert their own badges" 
 ON public.user_achievement_badges 
 FOR INSERT 
@@ -188,16 +201,19 @@ CREATE TABLE IF NOT EXISTS public.session_feedback (
 ALTER TABLE public.session_feedback ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies for session_feedback
+DROP POLICY IF EXISTS "Users can view their own feedback" ON public.session_feedback;
 CREATE POLICY "Users can view their own feedback" 
 ON public.session_feedback 
 FOR SELECT 
 USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can insert their own feedback" ON public.session_feedback;
 CREATE POLICY "Users can insert their own feedback" 
 ON public.session_feedback 
 FOR INSERT 
 WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can update their own feedback" ON public.session_feedback;
 CREATE POLICY "Users can update their own feedback" 
 ON public.session_feedback 
 FOR UPDATE 
@@ -353,5 +369,4 @@ COMMENT ON TABLE public.user_progress IS 'Tracks user progress, points, streaks,
 COMMENT ON TABLE public.achievement_badges IS 'Defines available achievement badges and their criteria';
 COMMENT ON TABLE public.user_achievement_badges IS 'Tracks badges earned by users';
 COMMENT ON TABLE public.session_feedback IS 'User self-assessment and reflection for debate sessions';
-
 
