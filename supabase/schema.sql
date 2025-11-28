@@ -370,3 +370,4 @@ COMMENT ON TABLE public.achievement_badges IS 'Defines available achievement bad
 COMMENT ON TABLE public.user_achievement_badges IS 'Tracks badges earned by users';
 COMMENT ON TABLE public.session_feedback IS 'User self-assessment and reflection for debate sessions';
 
+

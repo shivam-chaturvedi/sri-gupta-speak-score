@@ -130,7 +130,7 @@ const Home = () => {
           </div>
           
           <h1 className="text-5xl md:text-6xl font-bold mb-6 leading-tight">
-            Dialectica
+            Dialecta
           </h1>
           
           <p className="text-xl md:text-2xl mb-4 opacity-90">

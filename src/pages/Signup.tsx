@@ -74,7 +74,7 @@ const Signup = () => {
       } else {
         toast({
           title: "Account Created Successfully!",
-          description: "Welcome to Dialectica! You can now start practicing your debate skills.",
+          description: "Welcome to Dialecta! You can now start practicing your debate skills.",
           variant: "default",
         })
         
@@ -118,7 +118,7 @@ const Signup = () => {
           <div className="inline-flex items-center justify-center w-16 h-16 bg-white/20 backdrop-blur-sm rounded-full mb-4">
             <Shield className="w-8 h-8 text-white" />
           </div>
-          <h1 className="text-3xl font-bold text-white mb-2">Dialectica</h1>
+          <h1 className="text-3xl font-bold text-white mb-2">Dialecta</h1>
           <p className="text-white/80 text-sm">Start Your Speaking Journey</p>
         </div>
 
@@ -129,7 +129,7 @@ const Signup = () => {
               Create Account
             </CardTitle>
             <CardDescription className="text-center text-muted-foreground">
-              Join Dialectica and master the art of debate
+              Join Dialecta and master the art of debate
             </CardDescription>
           </CardHeader>
           
@@ -263,7 +263,7 @@ const Signup = () => {
         {/* Footer */}
         <div className="mt-8 text-center">
           <p className="text-xs text-white/70">
-            © 2024 Dialectica. All rights reserved.
+            © 2024 Dialecta. All rights reserved.
           </p>
         </div>
       </div>

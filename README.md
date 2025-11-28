@@ -1,4 +1,4 @@
-# Dialectica - Speak. Score. Improve.
+# Dialecta - Speak. Score. Improve.
 
 Master the art of debate and public speaking with AI-powered feedback. Practice daily, track your progress, and become a confident speaker.
 

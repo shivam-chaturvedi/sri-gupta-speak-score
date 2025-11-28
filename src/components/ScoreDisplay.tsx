@@ -511,7 +511,7 @@ export function ScoreDisplay({
           onClick={() => {
             if (navigator.share) {
               navigator.share({
-                title: 'My Dialectica Score',
+                title: 'My Dialecta Score',
                 text: `I scored ${totalScore}/${maxScore} on "${motion.topic}" - ${overall.message}`,
                 url: window.location.href
               });

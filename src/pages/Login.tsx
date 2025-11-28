@@ -71,7 +71,7 @@ const Login = () => {
       } else {
         toast({
           title: "Welcome back!",
-          description: "You have successfully signed in to Dialectica.",
+          description: "You have successfully signed in to Dialecta.",
           variant: "default",
         })
         
@@ -118,7 +118,7 @@ const Login = () => {
           <div className="inline-flex items-center justify-center w-16 h-16 bg-white/20 backdrop-blur-sm rounded-full mb-4">
             <Shield className="w-8 h-8 text-white" />
           </div>
-          <h1 className="text-3xl font-bold text-white mb-2">Dialectica</h1>
+          <h1 className="text-3xl font-bold text-white mb-2">Dialecta</h1>
           <p className="text-white/80 text-sm">Premium Research & Consulting Platform</p>
         </div>
 
@@ -129,7 +129,7 @@ const Login = () => {
               Welcome Back
             </CardTitle>
             <CardDescription className="text-center text-muted-foreground">
-              Sign in to your Dialectica account
+              Sign in to your Dialecta account
             </CardDescription>
           </CardHeader>
           
@@ -253,7 +253,7 @@ const Login = () => {
         {/* Footer */}
         <div className="mt-8 text-center">
           <p className="text-xs text-white/70">
-            © 2024 Dialectica. All rights reserved.
+            © 2024 Dialecta. All rights reserved.
           </p>
         </div>
       </div>
