@@ -307,17 +307,56 @@ ${prompt}`
 
         this.markEnvKeyAsUsed(candidate);
         console.log('✅ API call successful, parsing response...');
-        console.log('📥 RAW AI RESPONSE (full):', analysis);
+        console.log('═══════════════════════════════════════════════════════════');
+        console.log('📥 RAW GEMINI RESPONSE - FULL TEXT:');
+        console.log('═══════════════════════════════════════════════════════════');
+        console.log(analysis);
+        console.log('═══════════════════════════════════════════════════════════');
         console.log('📥 RAW AI RESPONSE length:', analysis.length);
-        console.log('📥 RAW AI RESPONSE first 1000 chars:', analysis.substring(0, 1000));
-        console.log('📥 RAW AI RESPONSE last 1000 chars:', analysis.substring(Math.max(0, analysis.length - 1000)));
+        console.log('📥 RAW AI RESPONSE first 2000 chars:', analysis.substring(0, 2000));
+        console.log('📥 RAW AI RESPONSE last 2000 chars:', analysis.substring(Math.max(0, analysis.length - 2000)));
         
-        // Check if enhanced_argument appears in the raw response
-        const enhancedArgInResponse = analysis.toLowerCase().includes('enhanced') || analysis.toLowerCase().includes('enhanced_argument');
-        console.log('🔍 Enhanced argument keyword found in response:', enhancedArgInResponse);
-        if (enhancedArgInResponse) {
+        // Check if key sections appear in the raw response
+        const checks = {
+          enhanced: analysis.toLowerCase().includes('enhanced'),
+          enhanced_argument: analysis.toLowerCase().includes('enhanced_argument'),
+          counter: analysis.toLowerCase().includes('counter'),
+          defense: analysis.toLowerCase().includes('defense'),
+          logic_score: analysis.toLowerCase().includes('logic') && analysis.match(/\d+/),
+          json: analysis.trim().startsWith('{') || analysis.includes('"logic_score"')
+        };
+        console.log('🔍 Response content checks:', checks);
+        
+        // Find and log sections
+        if (checks.enhanced) {
           const enhancedIndex = analysis.toLowerCase().indexOf('enhanced');
-          console.log('🔍 Enhanced argument section preview:', analysis.substring(Math.max(0, enhancedIndex - 50), Math.min(analysis.length, enhancedIndex + 1000)));
+          console.log('🔍 Enhanced section found at index:', enhancedIndex);
+          console.log('🔍 Enhanced section preview (2000 chars):', analysis.substring(Math.max(0, enhancedIndex - 100), Math.min(analysis.length, enhancedIndex + 2000)));
+        }
+        
+        if (checks.counter) {
+          const counterIndex = analysis.toLowerCase().indexOf('counter');
+          console.log('🔍 Counter section found at index:', counterIndex);
+          console.log('🔍 Counter section preview (1500 chars):', analysis.substring(Math.max(0, counterIndex - 100), Math.min(analysis.length, counterIndex + 1500)));
+        }
+        
+        if (checks.defense) {
+          const defenseIndex = analysis.toLowerCase().indexOf('defense');
+          console.log('🔍 Defense section found at index:', defenseIndex);
+          console.log('🔍 Defense section preview (1500 chars):', analysis.substring(Math.max(0, defenseIndex - 100), Math.min(analysis.length, defenseIndex + 1500)));
+        }
+        
+        // Check if it's JSON format
+        if (checks.json) {
+          console.log('🔍 Response appears to be JSON format');
+          const jsonStart = analysis.indexOf('{');
+          const jsonEnd = analysis.lastIndexOf('}');
+          if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
+            console.log('🔍 JSON boundaries found:', jsonStart, 'to', jsonEnd);
+            console.log('🔍 JSON preview (first 3000 chars):', analysis.substring(jsonStart, Math.min(jsonStart + 3000, jsonEnd + 1)));
+          }
+        } else {
+          console.log('🔍 Response appears to be TEXT format');
         }
         
         const parsedResult = this.parseAnalysis(analysis, request.transcript);
@@ -754,79 +793,161 @@ FINAL REMINDER - CRITICAL FOR QUALITY:
 7. NO generic feedback like "improve your argument" - MUST be specific: "Your premise '[exact quote]' needs [specific statistic] from [source]"
 8. If any section seems incomplete, expand it until it meets the minimum requirements
 
-OUTPUT FORMAT REQUIREMENTS:
-You can provide your analysis in either format:
+OUTPUT FORMAT REQUIREMENTS - CRITICAL:
 
-OPTION 1 - JSON (preferred if possible):
-Provide a complete JSON object with all required fields. The JSON can be embedded within explanatory text.
+YOU MUST RETURN A VALID JSON OBJECT with ALL required fields. Do NOT include explanatory text before or after the JSON. Return ONLY the JSON object.
 
-OPTION 2 - Structured Text (always acceptable):
-Provide clear, structured text with labeled sections. Use clear labels like:
-- "LOGIC SCORE:", "RHETORIC SCORE:", "EMPATHY SCORE:", "DELIVERY SCORE:"
-- "LOGIC FEEDBACK:", "RHETORIC FEEDBACK:", etc.
-- "MISSING POINTS:", "ENHANCED ARGUMENT:", etc.
+REQUIRED JSON STRUCTURE:
+{
+  "logic_score": <0-10 number>,
+  "logic_feedback": ["feedback1", "feedback2", ...],
+  "rhetoric_score": <0-10 number>,
+  "rhetoric_feedback": ["feedback1", "feedback2", ...],
+  "empathy_score": <0-5 number>,
+  "empathy_feedback": ["feedback1", "feedback2", ...],
+  "delivery_score": <0-5 number>,
+  "delivery_feedback": ["feedback1", "feedback2", ...],
+  "missing_points": ["point1", "point2", ...],
+  "enhanced_argument": "<full rewritten argument text here - must be substantial, 200+ words>",
+  "enhanced_feedback": {
+    "argument_analysis": {
+      "logical_structure": "<detailed analysis>",
+      "evidence_quality": "<detailed analysis>",
+      "clarity_score": <1-10 number>,
+      "persuasiveness": "<detailed analysis>"
+    },
+    "data_enhancements": {
+      "logical_frameworks": ["framework1", "framework2", ...],
+      "premise_strengthening": ["premise1", "premise2", ...],
+      "fallacy_corrections": ["correction1", "correction2", ...],
+      "reasoning_improvements": ["improvement1", "improvement2", ...]
+    },
+    "counter_arguments": [
+      {
+        "rebuttal": "<2-3 sentences of opponent's argument>",
+        "strength_level": "High|Medium|Low",
+        "supporting_evidence": "<logical reasoning opponent would use>",
+        "common_sources": "<where opponent finds this>",
+        "key_points": ["point1", "point2", "point3", "point4"]
+      },
+      ... (must have 3 counterarguments)
+    ],
+    "defense_strategies": [
+      {
+        "preemptive_defense": "<2-3 sentences ready to use>",
+        "direct_response": "<3-4 sentences ready to use>",
+        "redirect_technique": "<3-4 sentences ready to use>",
+        "evidence_arsenal": "<logical approaches and evidence>",
+        "key_points": ["point1", "point2", "point3", "point4", "point5"]
+      },
+      ... (must have 3 defense strategies)
+    ],
+    "strategic_recommendations": ["rec1", "rec2", ...]
+  }
+}
 
-REQUIRED INFORMATION:
-- Scores: logic_score (0-10), rhetoric_score (0-10), empathy_score (0-5), delivery_score (0-5)
-- Feedback arrays: logic_feedback, rhetoric_feedback, empathy_feedback, delivery_feedback
-- Missing points array
-- Enhanced argument text
-- Enhanced feedback with counter_arguments and defense_strategies
+CRITICAL REQUIREMENTS:
+1. Return ONLY valid JSON - no markdown, no code blocks, no explanatory text
+2. enhanced_argument MUST be a substantial rewritten version (200+ words minimum)
+3. counter_arguments MUST have exactly 3 items, each with all fields filled
+4. defense_strategies MUST have exactly 3 items, each with all fields filled
+5. All arrays must have at least 3 items
+6. All text fields must be substantial (not empty strings)
+7. Use proper JSON escaping for quotes and newlines
 
-FINAL REMINDER:
-Always provide complete analysis with scores and detailed feedback. Use whichever format (JSON or structured text) that works best for you, but ensure all required information is included and clearly labeled.
+DO NOT wrap the JSON in markdown code blocks. Return the raw JSON object only.
 `;
   }
 
   private parseAnalysis(analysis: string, originalTranscript: string): ScoreResult {
+    console.log('═══════════════════════════════════════════════════════════');
     console.log('🔍 PARSE ANALYSIS - Starting parse...');
+    console.log('═══════════════════════════════════════════════════════════');
     console.log('📥 Raw AI response received, length:', analysis.length);
-    console.log('📥 First 500 chars:', analysis.substring(0, 500));
-    console.log('📥 Last 500 chars:', analysis.substring(Math.max(0, analysis.length - 500)));
+    console.log('📥 First 1000 chars:', analysis.substring(0, 1000));
+    console.log('📥 Last 1000 chars:', analysis.substring(Math.max(0, analysis.length - 1000)));
     
-    // Try JSON parsing first, then fallback to text parsing
-    try {
-      console.log('🔍 Attempting JSON parsing...');
-      const jsonResult = this.parseAsJson(analysis, originalTranscript);
-      console.log('✅ JSON parsing successful!');
-      console.log('📊 JSON Result - Enhanced Argument:', jsonResult.enhancedArgument?.substring(0, 200) || 'N/A');
-      return jsonResult;
-    } catch (jsonError) {
-      console.warn('⚠️ JSON parsing failed, attempting text parsing:', jsonError instanceof Error ? jsonError.message : String(jsonError));
-      console.warn('⚠️ JSON Error details:', jsonError);
+    // Check what format we're dealing with
+    const hasJsonCodeBlock = /```(?:json)?\s*\{/.test(analysis);
+    const hasJsonBraces = analysis.includes('{') && analysis.includes('"logic_score"');
+    const isJsonLike = hasJsonCodeBlock || analysis.trim().startsWith('{') || hasJsonBraces || analysis.includes('"enhanced_argument"');
+    const isTextLike = !isJsonLike && (analysis.includes('LOGIC SCORE') || analysis.includes('Enhanced Argument') || analysis.includes('Counterargument'));
+    
+    console.log('🔍 Format detection - Has JSON code block:', hasJsonCodeBlock);
+    console.log('🔍 Format detection - Has JSON braces:', hasJsonBraces);
+    console.log('🔍 Format detection - JSON-like:', isJsonLike, 'Text-like:', isTextLike);
+    
+    // Try JSON parsing first if it looks like JSON
+    if (isJsonLike) {
       try {
-        console.log('🔍 Attempting text parsing...');
-        const textResult = this.parseAsText(analysis, originalTranscript);
-        console.log('✅ Text parsing successful!');
-        console.log('📊 Text Result - Enhanced Argument:', textResult.enhancedArgument?.substring(0, 200) || 'N/A');
-        return textResult;
-      } catch (textError) {
-        console.error('❌ Both JSON and text parsing failed, using fallback');
-        console.error('❌ Text Error details:', textError);
-        const fallbackResult = this.createFallbackResult(analysis, originalTranscript);
-        console.log('📊 Fallback Result - Enhanced Argument:', fallbackResult.enhancedArgument?.substring(0, 200) || 'N/A');
-        return fallbackResult;
+        console.log('🔍 Attempting JSON parsing (format detected as JSON)...');
+        const jsonResult = this.parseAsJson(analysis, originalTranscript);
+        console.log('✅ JSON parsing successful!');
+        console.log('📊 JSON Result - Enhanced Argument length:', jsonResult.enhancedArgument?.length || 0);
+        console.log('📊 JSON Result - Enhanced Argument preview:', jsonResult.enhancedArgument?.substring(0, 300) || 'N/A');
+        console.log('📊 JSON Result - Counter arguments:', jsonResult.enhancedFeedback?.counterArguments?.length || 0);
+        console.log('📊 JSON Result - Defense strategies:', jsonResult.enhancedFeedback?.defenseStrategies?.length || 0);
+        return jsonResult;
+      } catch (jsonError) {
+        console.warn('⚠️ JSON parsing failed, attempting text parsing:', jsonError instanceof Error ? jsonError.message : String(jsonError));
+        console.warn('⚠️ JSON Error details:', jsonError);
+        // Fall through to text parsing
       }
+    }
+    
+    // Try text parsing
+    try {
+      console.log('🔍 Attempting text parsing...');
+      const textResult = this.parseAsText(analysis, originalTranscript);
+      console.log('✅ Text parsing successful!');
+      console.log('📊 Text Result - Enhanced Argument length:', textResult.enhancedArgument?.length || 0);
+      console.log('📊 Text Result - Enhanced Argument preview:', textResult.enhancedArgument?.substring(0, 300) || 'N/A');
+      console.log('📊 Text Result - Counter arguments:', textResult.enhancedFeedback?.counterArguments?.length || 0);
+      console.log('📊 Text Result - Defense strategies:', textResult.enhancedFeedback?.defenseStrategies?.length || 0);
+      return textResult;
+    } catch (textError) {
+      console.error('❌ Text parsing also failed, using fallback');
+      console.error('❌ Text Error details:', textError);
+      const fallbackResult = this.createFallbackResult(analysis, originalTranscript);
+      console.log('📊 Fallback Result - Enhanced Argument length:', fallbackResult.enhancedArgument?.length || 0);
+      console.log('📊 Fallback Result - Enhanced Argument preview:', fallbackResult.enhancedArgument?.substring(0, 300) || 'N/A');
+      return fallbackResult;
     }
   }
 
   private parseAsJson(analysis: string, originalTranscript: string): ScoreResult {
     try {
+      console.log('🔍 JSON PARSING - Starting JSON extraction...');
       // Clean the response - remove markdown code blocks if present
       let cleanedAnalysis = analysis.trim();
+      console.log('🔍 Original analysis length:', cleanedAnalysis.length);
       
       // Remove common prefixes like "Full response:", "Response:", etc.
       cleanedAnalysis = cleanedAnalysis.replace(/^(Full\s+response|Response|Here\s+is|Analysis):\s*/i, '');
       
-      // Remove markdown code fences if present (```json or ```)
-      cleanedAnalysis = cleanedAnalysis.replace(/^```json\s*/i, '').replace(/^```\s*/i, '');
-      cleanedAnalysis = cleanedAnalysis.replace(/\s*```\s*$/i, '');
+      // Remove markdown code fences if present (```json or ```) - handle multiline
+      // First, try to find and extract JSON between code fences
+      const codeBlockMatch = cleanedAnalysis.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+      if (codeBlockMatch && codeBlockMatch[1]) {
+        console.log('✅ Found JSON in code block, extracting...');
+        cleanedAnalysis = codeBlockMatch[1].trim();
+      } else {
+        // Fallback: remove code fences from start/end
+        cleanedAnalysis = cleanedAnalysis.replace(/^```json\s*/i, '').replace(/^```\s*/i, '');
+        cleanedAnalysis = cleanedAnalysis.replace(/\s*```\s*$/i, '');
+      }
+      
+      console.log('🔍 After code block removal, length:', cleanedAnalysis.length);
       
       // Find JSON object boundaries - look for first { and last }
       const firstBrace = cleanedAnalysis.indexOf('{');
       const lastBrace = cleanedAnalysis.lastIndexOf('}');
       
+      console.log('🔍 JSON braces found - first:', firstBrace, 'last:', lastBrace);
+      
       if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
+        console.error('❌ No valid JSON braces found');
+        console.error('🔍 First 500 chars of cleaned analysis:', cleanedAnalysis.substring(0, 500));
         throw new Error('No JSON braces found in response');
       }
 
@@ -867,12 +988,16 @@ Always provide complete analysis with scores and detailed feedback. Use whicheve
       if (braceCount === 0 && jsonEnd > jsonStart) {
         jsonString = cleanedAnalysis.substring(jsonStart, jsonEnd + 1);
         console.log('✅ Found balanced JSON object');
+        console.log('🔍 Extracted JSON length:', jsonString.length);
+        console.log('🔍 Extracted JSON preview (first 500 chars):', jsonString.substring(0, 500));
       } else {
         jsonString = cleanedAnalysis.substring(firstBrace, lastBrace + 1);
-        console.warn('⚠️ Using fallback extraction');
+        console.warn('⚠️ Using fallback extraction (brace count:', braceCount, ')');
+        console.log('🔍 Fallback JSON length:', jsonString.length);
       }
 
       jsonString = this.balanceJsonBraces(jsonString);
+      console.log('🔍 After balancing braces, JSON length:', jsonString.length);
       let parsed;
       
       try {
@@ -881,8 +1006,16 @@ Always provide complete analysis with scores and detailed feedback. Use whicheve
         console.log('📊 Parsed JSON keys:', Object.keys(parsed));
         console.log('📊 Parsed enhanced_argument exists:', !!parsed.enhanced_argument);
         console.log('📊 Parsed enhanced_argument length:', parsed.enhanced_argument?.length || 0);
+        console.log('📊 Parsed counter_arguments count:', parsed.enhanced_feedback?.counter_arguments?.length || 0);
+        console.log('📊 Parsed defense_strategies count:', parsed.enhanced_feedback?.defense_strategies?.length || 0);
         if (parsed.enhanced_argument) {
           console.log('📊 Parsed enhanced_argument preview:', parsed.enhanced_argument.substring(0, 300));
+        }
+        if (parsed.enhanced_feedback?.counter_arguments) {
+          console.log('📊 First counterargument preview:', JSON.stringify(parsed.enhanced_feedback.counter_arguments[0], null, 2));
+        }
+        if (parsed.enhanced_feedback?.defense_strategies) {
+          console.log('📊 First defense strategy preview:', JSON.stringify(parsed.enhanced_feedback.defense_strategies[0], null, 2));
         }
       } catch (parseError) {
         console.warn('⚠️ Initial JSON parse failed, attempting to fix...');
