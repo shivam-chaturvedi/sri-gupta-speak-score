@@ -239,14 +239,18 @@ export function ScoreDisplay({
                 <p className="text-muted-foreground mb-4">
                   Here are key arguments and evidence you could include to strengthen your position:
                 </p>
-                <ul className="space-y-2">
-                  {missingPoints.map((point, index) => (
-                    <li key={index} className="flex items-start gap-3">
-                      <div className="w-2 h-2 bg-warning rounded-full mt-2 flex-shrink-0" />
-                      <span className="text-muted-foreground">{point}</span>
-                    </li>
-                  ))}
-                </ul>
+                {missingPoints && missingPoints.length > 0 ? (
+                  <ul className="space-y-2">
+                    {missingPoints.map((point, index) => (
+                      <li key={index} className="flex items-start gap-3">
+                        <div className="w-2 h-2 bg-warning rounded-full mt-2 flex-shrink-0" />
+                        <span className="text-muted-foreground">{point}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-muted-foreground italic">No missing points identified. Review your logical structure and add more specific examples.</p>
+                )}
               </div>
             </TabsContent>
             
@@ -258,7 +262,7 @@ export function ScoreDisplay({
                 </p>
                 <div className="bg-success/10 p-4 rounded-lg border-l-4 border-success">
                   <div className="text-muted-foreground leading-relaxed whitespace-pre-line">
-                    {enhancedArgument}
+                    {enhancedArgument || <span className="italic">Enhanced argument analysis would be provided here.</span>}
                   </div>
                 </div>
               </div>
@@ -362,48 +366,52 @@ export function ScoreDisplay({
                       <AlertTriangle className="w-5 h-5 text-primary" />
                       ⚔️ Anticipated Counterattacks
                     </h4>
-                    <div className="space-y-4">
-                      {enhancedFeedback.counterArguments.map((counter, i) => (
-                        <div key={i} className="border border-muted rounded-lg p-4">
-                          <div className="flex items-center justify-between mb-3">
-                            <h5 className="font-medium text-foreground">Counterargument #{i + 1}</h5>
-                            <Badge variant={counter.strengthLevel === 'High' ? 'destructive' : counter.strengthLevel === 'Medium' ? 'default' : 'secondary'}>
-                              {counter.strengthLevel} Threat
-                            </Badge>
-                          </div>
-                          <div className="space-y-3">
-                            <div>
-                              <strong className="text-foreground">The Rebuttal:</strong>
-                              <p className="text-muted-foreground mt-1">{counter.rebuttal}</p>
+                    {enhancedFeedback.counterArguments && enhancedFeedback.counterArguments.length > 0 ? (
+                      <div className="space-y-4">
+                        {enhancedFeedback.counterArguments.map((counter, i) => (
+                          <div key={i} className="border border-muted rounded-lg p-4">
+                            <div className="flex items-center justify-between mb-3">
+                              <h5 className="font-medium text-foreground">Counterargument #{i + 1}</h5>
+                              <Badge variant={counter.strengthLevel === 'High' ? 'destructive' : counter.strengthLevel === 'Medium' ? 'default' : 'secondary'}>
+                                {counter.strengthLevel} Threat
+                              </Badge>
                             </div>
-                            <div>
-                              <strong className="text-foreground">Supporting Evidence:</strong>
-                              <p className="text-muted-foreground mt-1">{counter.supportingEvidence}</p>
-                            </div>
-                            <div>
-                              <strong className="text-foreground">Common Sources:</strong>
-                              <p className="text-muted-foreground mt-1">{counter.commonSources}</p>
-                            </div>
-                            {counter.keyPoints && counter.keyPoints.length > 0 && (
+                            <div className="space-y-3">
                               <div>
-                                <strong className="text-foreground flex items-center gap-2 mb-2">
-                                  <AlertTriangle className="w-4 h-4" />
-                                  Key Talking Points (Opponent Will Use):
-                                </strong>
-                                <ul className="space-y-2 ml-6">
-                                  {counter.keyPoints.map((point, idx) => (
-                                    <li key={idx} className="text-muted-foreground flex items-start gap-2">
-                                      <div className="w-1.5 h-1.5 bg-destructive rounded-full mt-2 flex-shrink-0" />
-                                      <span>{point}</span>
-                                    </li>
-                                  ))}
-                                </ul>
+                                <strong className="text-foreground">The Rebuttal:</strong>
+                                <p className="text-muted-foreground mt-1">{counter.rebuttal}</p>
                               </div>
-                            )}
+                              <div>
+                                <strong className="text-foreground">Supporting Evidence:</strong>
+                                <p className="text-muted-foreground mt-1">{counter.supportingEvidence}</p>
+                              </div>
+                              <div>
+                                <strong className="text-foreground">Common Sources:</strong>
+                                <p className="text-muted-foreground mt-1">{counter.commonSources}</p>
+                              </div>
+                              {counter.keyPoints && counter.keyPoints.length > 0 && (
+                                <div>
+                                  <strong className="text-foreground flex items-center gap-2 mb-2">
+                                    <AlertTriangle className="w-4 h-4" />
+                                    Key Talking Points (Opponent Will Use):
+                                  </strong>
+                                  <ul className="space-y-2 ml-6">
+                                    {counter.keyPoints.map((point, idx) => (
+                                      <li key={idx} className="text-muted-foreground flex items-start gap-2">
+                                        <div className="w-1.5 h-1.5 bg-destructive rounded-full mt-2 flex-shrink-0" />
+                                        <span>{point}</span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      ))}
-                    </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-muted-foreground italic">No counterarguments identified. Consider potential opposing viewpoints to strengthen your argument.</p>
+                    )}
                   </div>
                 </TabsContent>
 
@@ -413,8 +421,9 @@ export function ScoreDisplay({
                       <Shield className="w-5 h-5 text-primary" />
                       🛡️ Defense Strategies
                     </h4>
-                    <div className="space-y-4">
-                      {enhancedFeedback.defenseStrategies.map((strategy, i) => (
+                    {enhancedFeedback.defenseStrategies && enhancedFeedback.defenseStrategies.length > 0 ? (
+                      <div className="space-y-4">
+                        {enhancedFeedback.defenseStrategies.map((strategy, i) => (
                         <div key={i} className="border border-muted rounded-lg p-4">
                           <h5 className="font-medium text-foreground mb-3">Defense Strategy #{i + 1} (Against Counterargument #{i + 1})</h5>
                           <div className="space-y-3">
@@ -452,23 +461,28 @@ export function ScoreDisplay({
                             )}
                           </div>
                         </div>
-                      ))}
-                    </div>
-
-                    <div className="mt-6 bg-primary/10 p-4 rounded-lg">
-                      <h5 className="font-medium text-foreground mb-2 flex items-center gap-2">
-                        <Star className="w-4 h-4" />
-                        💡 Strategic Recommendations
-                      </h5>
-                      <ul className="space-y-2">
-                        {enhancedFeedback.strategicRecommendations.map((rec, i) => (
-                          <li key={i} className="text-muted-foreground flex items-start gap-2">
-                            <div className="w-1.5 h-1.5 bg-primary rounded-full mt-2 flex-shrink-0" />
-                            {rec}
-                          </li>
                         ))}
-                      </ul>
-                    </div>
+                      </div>
+                    ) : (
+                      <p className="text-muted-foreground italic">No defense strategies identified. Consider how to counter potential opposing arguments.</p>
+                    )}
+
+                    {enhancedFeedback.strategicRecommendations && enhancedFeedback.strategicRecommendations.length > 0 && (
+                      <div className="mt-6 bg-primary/10 p-4 rounded-lg">
+                        <h5 className="font-medium text-foreground mb-2 flex items-center gap-2">
+                          <Star className="w-4 h-4" />
+                          💡 Strategic Recommendations
+                        </h5>
+                        <ul className="space-y-2">
+                          {enhancedFeedback.strategicRecommendations.map((rec, i) => (
+                            <li key={i} className="text-muted-foreground flex items-start gap-2">
+                              <div className="w-1.5 h-1.5 bg-primary rounded-full mt-2 flex-shrink-0" />
+                              {rec}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                   </div>
                 </TabsContent>
               </>

@@ -60,139 +60,313 @@ interface SpeechAnalysisRequest {
   duration: number;
 }
 
+interface ApiKeyCandidate {
+  key: string;
+  isManual: boolean;
+  envIndex?: number;
+}
+
 export class AIService {
-  private apiKey: string = "AIzaSyBscWNBOsm520KHCKeUdT7LlLOtXSsf2VI";
+  private manualApiKey: string | null = null;
+  private envApiKeys: string[] = [];
+  private nextEnvIndex = 0;
 
   constructor() {
-    // API key is hardcoded
+    const rawKeys = import.meta.env.VITE_GEMINI_API_KEYS || "";
+    this.envApiKeys = rawKeys
+      .split(",")
+      .map((key) => key.trim())
+      .filter(Boolean);
+    this.manualApiKey = this.loadManualKeyFromStorage();
   }
 
   setApiKey(key: string) {
-    this.apiKey = key;
+    const sanitized = key.trim();
+    this.manualApiKey = sanitized.length > 0 ? sanitized : null;
+    this.persistManualKey(this.manualApiKey);
   }
 
   async analyzeSpeeches(request: SpeechAnalysisRequest): Promise<ScoreResult> {
-    if (!this.apiKey) {
-      throw new Error('API key not set. Please provide your Google Gemini API key.');
-    }
-
     const prompt = this.buildAnalysisPrompt(request);
+    const stance = request.stance || 'neutral';
+    const stanceDisplay = stance === 'neutral' ? 'NEUTRAL' : stance.toUpperCase();
 
     try {
-      // Use Gemini 2.0 Flash model with header-based authentication
-      const apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
-      console.log('Calling Gemini 2.0 Flash API...');
-      
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-goog-api-key': this.apiKey,
-        },
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                {
-                  text: `You are an EXPERT DEBATE COACH with 20+ years of experience training world championship debaters. You MUST provide SPECIFIC, ACTIONABLE feedback with EXACT word-for-word examples. You MUST generate detailed counterarguments and defense strategies. NO vague feedback allowed.\n\n${prompt}`
-                }
-              ]
-            }
-          ],
-          generationConfig: {
-            temperature: 0.7,
-            topP: 0.9,
-            topK: 40,
-            maxOutputTokens: 8192,
-          }
-        }),
-      });
+      const apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
+      const payload = {
+        contents: [
+          {
+            parts: [
+              {
+                text: `You are a debate coach specializing in logical argumentation and reasoning for Schoolhouse dialogue portfolios. 
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('API request failed:', response.status, response.statusText);
-        console.error('Error response body:', errorText);
-        
-        let errorMessage = `Analysis failed: ${response.status} ${response.statusText}`;
-        
+CRITICAL CONTEXT:
+- STUDENT'S CHOSEN POSITION: ${stanceDisplay}
+- Your role is to help strengthen arguments through LOGICAL REASONING, not unsourced data
+- Focus on argument structure, logical validity, and reasoning frameworks
+- NEVER provide unsourced statistics or facts - guide students to research and cite properly
+- Adapt your coaching to strengthen their ${stanceDisplay} position
+
+You MUST provide SPECIFIC, ACTIONABLE feedback with EXACT word-for-word examples focusing on logical reasoning. You MUST generate detailed logical counterarguments and defense strategies. NO vague feedback allowed. NO unsourced statistics.
+
+OUTPUT FORMAT - CRITICAL INSTRUCTIONS:
+You MUST provide your analysis in a structured format. You can return it as:
+1. A JSON object (preferred but optional)
+2. Structured text with clear sections and labels
+
+If using JSON, format it like this:
+{
+  "logic_score": <0-10>,
+  "logic_feedback": ["feedback1", "feedback2", ...],
+  "rhetoric_score": <0-10>,
+  "rhetoric_feedback": ["feedback1", "feedback2", ...],
+  "empathy_score": <0-5>,
+  "empathy_feedback": ["feedback1", "feedback2", ...],
+  "delivery_score": <0-5>,
+  "delivery_feedback": ["feedback1", "feedback2", ...],
+  "missing_points": ["point1", "point2", ...],
+  "enhanced_argument": "full text here",
+  "enhanced_feedback": {...}
+}
+
+If using structured text, format it clearly with labels like:
+LOGIC SCORE: <number>
+LOGIC FEEDBACK:
+- <feedback point 1>
+- <feedback point 2>
+...
+
+RHETORIC SCORE: <number>
+RHETORIC FEEDBACK:
+- <feedback point 1>
+...
+
+And so on for all categories.
+
+IMPORTANT: Always provide scores (0-10 for logic/rhetoric, 0-5 for empathy/delivery) and detailed feedback for each category.
+
+${prompt}`
+              }
+            ]
+          }
+        ],
+        generationConfig: {
+          temperature: 0.7,
+          topP: 0.9,
+          topK: 40,
+          maxOutputTokens: 4096,
+        }
+      };
+
+      const candidates = this.buildApiKeyCandidates();
+      if (candidates.length === 0) {
+        throw new Error('API key not set. Please provide your Google Gemini API key.');
+      }
+
+      let lastError: Error | null = null;
+
+      for (let attemptIndex = 0; attemptIndex < candidates.length; attemptIndex++) {
+        const candidate = candidates[attemptIndex];
+        let response: Response;
+
         try {
-          const errorJson = JSON.parse(errorText);
-          // Gemini API error format
-          if (errorJson.error) {
-            errorMessage = errorJson.error.message || errorJson.error.status || errorMessage;
-            // Check for specific error codes
-            if (errorJson.error.code === 401 || errorJson.error.code === 403) {
-              errorMessage = 'Invalid API key. Please check your Google Gemini API key and ensure it has the correct permissions.';
-            } else if (errorJson.error.code === 429) {
-              errorMessage = 'API rate limit exceeded. Please try again later.';
-            } else if (errorJson.error.code === 400) {
-              errorMessage = errorJson.error.message || 'Invalid request. Please check your input and try again.';
-            }
-          } else if (errorJson.message) {
-            errorMessage = errorJson.message;
+          console.log(`📡 Calling Gemini 2.5 Flash API (key ${attemptIndex + 1}/${candidates.length})...`);
+          console.log(`🔑 Using API key: ${candidate.key.substring(0, 10)}... (${candidate.isManual ? 'manual' : 'env'})`);
+          
+          // NO TIMEOUT - wait indefinitely for response
+          response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-goog-api-key': candidate.key,
+            },
+            body: JSON.stringify(payload),
+            // NO signal - wait indefinitely
+          });
+        } catch (fetchError) {
+          lastError = fetchError instanceof Error ? fetchError : new Error(String(fetchError));
+          // Network errors - don't rotate, throw immediately
+          console.error('❌ Network error with API key:', lastError);
+          throw lastError;
+        }
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          const errorMessage = this.buildErrorMessage(response.status, response.statusText, errorText);
+          lastError = new Error(errorMessage);
+
+          // ONLY rotate on 400 (Bad Request) or 429 (Rate Limit)
+          if ((response.status === 400 || response.status === 429) && attemptIndex < candidates.length - 1) {
+            console.warn(`⚠️ Status ${response.status} received, rotating to next API key`);
+            continue;
           }
-        } catch (e) {
-          // If error response is not JSON, use the text (limit length)
-          errorMessage = errorText ? (errorText.substring(0, 200) + (errorText.length > 200 ? '...' : '')) : errorMessage;
+
+          // For all other errors (401, 403, etc.) - throw immediately, don't rotate
+          console.error(`❌ API error ${response.status}, not rotating:`, errorMessage);
+          throw lastError;
         }
-        
-        // Provide specific guidance for common errors
-        if (response.status === 404) {
-          errorMessage = 'API endpoint not found. The Gemini API endpoint may have changed or the API key is invalid.';
-        } else if (response.status === 401 || response.status === 403) {
-          errorMessage = 'Invalid API key. Please check your Google Gemini API key and ensure it has the correct permissions.';
-        } else if (response.status === 429) {
-          errorMessage = 'Gemini limit exhausted. Please wait a moment and try the analysis again.';
-        } else if (response.status === 400) {
-          errorMessage = 'Invalid request. Please check your input and try again.';
-        } else if (response.status === 500 || response.status === 502 || response.status === 503) {
-          errorMessage = 'Gemini is not available right now. Please restart your speech and try again shortly.';
+
+        let data: any;
+        try {
+          data = await response.json();
+        } catch (jsonError) {
+          lastError = jsonError instanceof Error ? jsonError : new Error(String(jsonError));
+          // JSON parse errors - don't rotate, throw immediately
+          console.error('❌ JSON parse error, not rotating:', lastError);
+          throw lastError;
         }
-        
-        throw new Error(errorMessage);
+
+        if (data.error) {
+          const errorCode = data.error.code || data.error.errorCode || 0;
+          lastError = new Error(`AI API error: ${data.error.message || JSON.stringify(data.error)}`);
+          
+          // ONLY rotate on 400 or 429 error codes
+          if ((errorCode === 400 || errorCode === 429) && attemptIndex < candidates.length - 1) {
+            console.warn(`⚠️ Error code ${errorCode} received, rotating to next API key`);
+            continue;
+          }
+          
+          // For all other errors - throw immediately, don't rotate
+          console.error(`❌ API error code ${errorCode}, not rotating:`, lastError);
+          throw lastError;
+        }
+
+        if (!data.candidates || !data.candidates[0] || !data.candidates[0].content || !data.candidates[0].content.parts || !data.candidates[0].content.parts[0]) {
+          console.error('❌ Invalid API response structure:', data);
+          const structureError = new Error('Invalid response format from AI service');
+          // Invalid structure - don't rotate, throw immediately
+          throw structureError;
+        }
+
+        const analysis = data.candidates[0].content.parts[0].text;
+
+        if (!analysis) {
+          const emptyResponseError = new Error('Empty response from AI service');
+          // Empty response - don't rotate, throw immediately
+          console.error('❌ Empty response, not rotating');
+          throw emptyResponseError;
+        }
+
+        this.markEnvKeyAsUsed(candidate);
+        console.log('✅ API call successful, parsing response...');
+        return this.parseAnalysis(analysis, request.transcript);
       }
 
-      const data = await response.json();
-      
-      // Check for API errors in response
-      if (data.error) {
-        throw new Error(`AI API error: ${data.error.message || JSON.stringify(data.error)}`);
-      }
-
-      // Check if response structure is valid
-      if (!data.candidates || !data.candidates[0] || !data.candidates[0].content || !data.candidates[0].content.parts || !data.candidates[0].content.parts[0]) {
-        console.error('Invalid API response structure:', data);
-        throw new Error('Invalid response format from AI service');
-      }
-
-      const analysis = data.candidates[0].content.parts[0].text;
-
-      if (!analysis) {
-        throw new Error('Empty response from AI service');
-      }
-
-      return this.parseAnalysis(analysis, request.transcript);
+      console.warn('All Gemini API keys failed; returning friendly fallback message.', lastError);
+      throw new Error(AIService.GEMINI_ALL_KEYS_BUSY_MESSAGE);
     } catch (error) {
       console.error('AI analysis failed:', error);
-      // Provide more helpful error messages
       if (error instanceof Error) {
-        // Check if it's a network error
         if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError') || error.message.includes('Network request failed')) {
           throw new Error('Network error. Please check your internet connection and try again.');
         }
-        // Check if it's an API key issue
         if (error.message.includes('API_KEY') || error.message.includes('401') || error.message.includes('403') || error.message.includes('Invalid API key')) {
           throw new Error('Invalid API key. Please check your Google Gemini API key and ensure it has the correct permissions.');
         }
-        // Check if it's a rate limit issue
         if (error.message.includes('429') || error.message.includes('rate limit') || error.message.includes('limit exhausted')) {
           throw new Error('Gemini limit exhausted. Please wait a bit and try the analysis again.');
         }
-        // Re-throw the error with its message
         throw error;
       }
       throw new Error('AI analysis failed due to an unknown error. Please try again.');
     }
+  }
+
+  private buildApiKeyCandidates(): ApiKeyCandidate[] {
+    const candidates: ApiKeyCandidate[] = [];
+    const seen = new Set<string>();
+
+    if (this.manualApiKey) {
+      candidates.push({ key: this.manualApiKey, isManual: true });
+      seen.add(this.manualApiKey);
+    }
+
+    const envCount = this.envApiKeys.length;
+    for (let i = 0; i < envCount; i++) {
+      const index = (this.nextEnvIndex + i) % envCount;
+      const key = this.envApiKeys[index];
+      if (!key || seen.has(key)) continue;
+      candidates.push({ key, isManual: false, envIndex: index });
+      seen.add(key);
+    }
+
+    return candidates;
+  }
+
+
+  private markEnvKeyAsUsed(candidate: ApiKeyCandidate): void {
+    if (!candidate.isManual && typeof candidate.envIndex === "number" && this.envApiKeys.length > 0) {
+      this.nextEnvIndex = (candidate.envIndex + 1) % this.envApiKeys.length;
+    }
+  }
+
+  private loadManualKeyFromStorage(): string | null {
+    if (typeof window === "undefined") {
+      return null;
+    }
+    const storedKey = window.localStorage.getItem('gemini_api_key');
+    return storedKey ? storedKey.trim() : null;
+  }
+
+  private persistManualKey(key: string | null): void {
+    if (typeof window === "undefined") {
+      return;
+    }
+    if (key) {
+      window.localStorage.setItem('gemini_api_key', key);
+    } else {
+      window.localStorage.removeItem('gemini_api_key');
+    }
+  }
+
+  private buildErrorMessage(status: number, statusText: string, errorText: string): string {
+    console.error('API request failed:', status, statusText);
+    console.error('Error response body:', errorText);
+
+    let errorMessage = `Analysis failed: ${status} ${statusText}`;
+
+    try {
+      const errorJson = JSON.parse(errorText);
+      if (errorJson.error) {
+        errorMessage = errorJson.error.message || errorJson.error.status || errorMessage;
+        if (errorJson.error.code === 401 || errorJson.error.code === 403) {
+          errorMessage = 'Invalid API key. Please check your Google Gemini API key and ensure it has the correct permissions.';
+        } else if (errorJson.error.code === 429) {
+          errorMessage = 'API rate limit exceeded. Please try again later.';
+        } else if (errorJson.error.code === 400) {
+          errorMessage = errorJson.error.message || 'Invalid request. Please check your input and try again.';
+        }
+      } else if (errorJson.message) {
+        errorMessage = errorJson.message;
+      }
+    } catch (e) {
+      errorMessage = errorText ? (errorText.substring(0, 200) + (errorText.length > 200 ? '...' : '')) : errorMessage;
+    }
+
+    if (status === 404) {
+      errorMessage = 'API endpoint not found. The Gemini API endpoint may have changed or the API key is invalid.';
+    } else if (status === 401 || status === 403) {
+      errorMessage = 'Invalid API key. Please check your Google Gemini API key and ensure it has the correct permissions.';
+    } else if (status === 429) {
+      errorMessage = 'Gemini limit exhausted. Please wait a moment and try the analysis again.';
+    } else if (status === 400) {
+      errorMessage = 'Invalid request. Please check your input and try again.';
+    } else if (status === 500 || status === 502 || status === 503) {
+      errorMessage = 'Gemini is not available right now. Please restart your speech and try again shortly.';
+    }
+
+    return errorMessage;
+  }
+
+  private static readonly GEMINI_ALL_KEYS_BUSY_MESSAGE = 'Gemini is on a latte break and every API key is busy dancing with tokens. Take a breath, sip something cozy, and try again in a minute.';
+
+  private balanceJsonBraces(json: string): string {
+    const openCount = (json.match(/\{/g) || []).length;
+    const closeCount = (json.match(/\}/g) || []).length;
+    if (openCount <= closeCount) {
+      return json;
+    }
+    return json + '}'.repeat(openCount - closeCount);
   }
 
   private buildAnalysisPrompt(request: SpeechAnalysisRequest): string {
@@ -439,25 +613,35 @@ CRITICAL REQUIREMENTS FOR ACCURACY:
 - NO vague feedback like "be better" - give SPECIFIC strategies with exact wording
 - Enhanced argument should be dramatically improved, not just polished - rewrite with real statistics and examples
 
-MANDATORY SECTIONS - CANNOT BE EMPTY:
-1. counter_arguments: MUST provide 3 counterarguments. Each MUST:
-   - Be specific to their actual speech (not generic)
-   - Reference their exact claims from the transcript
-   - Include real statistics, studies, or examples with sources
-   - Be phrased as a skilled opponent would deliver it
-   - Be 2-3 sentences minimum, not one-liners
-   - Include key_points array with 3-4 specific talking points the opponent would use (each with specific evidence/statistics)
+CRITICAL - MANDATORY SECTIONS - THESE MUST ALWAYS BE INCLUDED:
 
-2. defense_strategies: MUST provide 3 defense strategies (one for each counterargument). Each MUST:
-   - Include EXACT word-for-word phrases ready to use
-   - Provide specific statistics, quotes, or case studies with sources
-   - Include placement instructions (where in speech)
-   - Be 3-4 sentences for direct_response and redirect_technique
-   - Include 3-4 pieces of evidence in evidence_arsenal with full attribution
-   - Include key_points array with 4-5 specific talking points the speaker should use to defend (each with exact wording, statistics, or quotes ready to deliver)
+1. "missing_points": MUST provide at least 3-5 specific points they missed. Each should be a logical argument, premise gap, or reasoning framework they could add.
 
-3. All feedback arrays MUST have at least 3 items, not 1-2
-4. All text fields MUST be substantial (minimum 2-3 sentences), not one-liners
+2. "enhanced_argument": MUST provide a completely rewritten version of their speech with improved logical structure, rhetorical devices, and addressing counterarguments.
+
+3. "enhanced_feedback.counter_arguments": MUST provide EXACTLY 3 counterarguments. Each MUST:
+   - Include "rebuttal" (2-3 sentences of what opponent would say)
+   - Include "strength_level" ("High", "Medium", or "Low")
+   - Include "supporting_logic" (logical reasoning opponent would use)
+   - Include "logical_frameworks" (reasoning approaches like deductive, inductive, etc.)
+   - Include "key_points" array with 3-4 specific logical talking points
+
+4. "enhanced_feedback.defense_strategies": MUST provide EXACTLY 3 defense strategies (one for each counterargument). Each MUST:
+   - Include "preemptive_defense" (2-3 sentences, word-for-word phrases)
+   - Include "direct_response" (3-4 sentences, ready to use)
+   - Include "redirect_technique" (3-4 sentences, reframing technique)
+   - Include "logical_arsenal" (3-4 logical approaches to use)
+   - Include "key_points" array with 4-5 specific talking points
+
+5. "enhanced_feedback.argument_analysis": MUST include:
+   - "logical_structure" (detailed breakdown)
+   - "reasoning_quality" (assessment of reasoning types used)
+   - "clarity_score" (1-10 number)
+   - "persuasiveness" (concrete analysis)
+
+6. "enhanced_feedback.strategic_recommendations": MUST provide at least 5-7 strategic recommendations
+
+ALL THESE SECTIONS ARE REQUIRED - DO NOT OMIT ANY OF THEM. If a section seems difficult, provide reasonable defaults but always include the structure.
 
 VALIDATION CHECKLIST - Before returning JSON, verify:
 ✓ Every counter_argument.rebuttal is 2-3 sentences and references their actual speech
@@ -481,150 +665,565 @@ FINAL REMINDER - CRITICAL FOR QUALITY:
 7. NO generic feedback like "improve your argument" - MUST be specific: "Your premise '[exact quote]' needs [specific statistic] from [source]"
 8. If any section seems incomplete, expand it until it meets the minimum requirements
 
-JSON FORMAT REQUIREMENTS - CRITICAL FOR PARSING:
-- Return ONLY valid JSON object
-- NO markdown code blocks
-- NO text before or after the JSON
-- NO explanations, just the JSON
-- ESCAPE ALL QUOTES IN STRING VALUES: Use \\" for quotes inside strings (e.g., "He said \\"hello\\"" not "He said "hello"")
-- ESCAPE ALL SPECIAL CHARACTERS: Use \\n for newlines, \\t for tabs, \\r for carriage returns
-- All scores must be integers
-- All arrays must contain strings (minimum 3 items per array)
-- counter_arguments array MUST have exactly 3 items, each with rebuttal (2-3 sentences), supporting_evidence (with numbers/sources), and common_sources
-- defense_strategies array MUST have exactly 3 items, each with preemptive_defense (2-3 sentences), direct_response (3-4 sentences), redirect_technique (3-4 sentences), and evidence_arsenal (3-4 pieces of evidence)
-- EXAMPLE OF PROPER ESCAPING: If your text contains "He said 'hello'", write it as: "He said 'hello'" (single quotes OK) or "He said \\"hello\\"" (escaped double quotes)
-- Example structure (use real analysis from their speech):
-{"logic_score":7,"logic_feedback":["When you said '[exact quote]', this creates a logical gap because [reason]. Add: '[exact improved version]'","Your premise '[exact quote]' lacks evidence. Add: 'According to World Bank 2023, 45% of countries experience X'","Use causal chain: 'Because [claim], and because [fact], therefore [conclusion]' at [location]"],"rhetoric_score":6,"rhetoric_feedback":["Your phrase '[exact quote]' uses anaphora effectively. Add more: '[exact 3-part example]'","Replace '[vague phrase]' with '[exact powerful phrase]'","You missed metaphor. Add: '[exact metaphor]'"],"empathy_score":3,"empathy_feedback":["You never acknowledged '[counterargument]'. Add: 'Some argue [counterargument], but [response]'","Your phrase '[exact quote]' sounds dismissive. Replace with '[empathetic version]'"],"delivery_score":4,"delivery_feedback":["Your sentence '[exact quote]' is unclear. Rewrite as: '[clearer version]'","Add transition '[exact phrase]' between [point A] and [point B]"],"missing_points":["IPCC 2023 report: 1.5°C warming threshold will be exceeded by 2030 without action","Historical precedent: Kyoto Protocol 1997 reduced emissions by 5.2% in 37 countries"],"enhanced_argument":"[Full rewritten version with statistics and examples]","enhanced_feedback":{"argument_analysis":{...},"counter_arguments":[{...},{...},{...}],"defense_strategies":[{...},{...},{...}]}}
+OUTPUT FORMAT REQUIREMENTS:
+You can provide your analysis in either format:
 
-Return the analysis as pure JSON starting with { and ending with }
+OPTION 1 - JSON (preferred if possible):
+Provide a complete JSON object with all required fields. The JSON can be embedded within explanatory text.
+
+OPTION 2 - Structured Text (always acceptable):
+Provide clear, structured text with labeled sections. Use clear labels like:
+- "LOGIC SCORE:", "RHETORIC SCORE:", "EMPATHY SCORE:", "DELIVERY SCORE:"
+- "LOGIC FEEDBACK:", "RHETORIC FEEDBACK:", etc.
+- "MISSING POINTS:", "ENHANCED ARGUMENT:", etc.
+
+REQUIRED INFORMATION:
+- Scores: logic_score (0-10), rhetoric_score (0-10), empathy_score (0-5), delivery_score (0-5)
+- Feedback arrays: logic_feedback, rhetoric_feedback, empathy_feedback, delivery_feedback
+- Missing points array
+- Enhanced argument text
+- Enhanced feedback with counter_arguments and defense_strategies
+
+FINAL REMINDER:
+Always provide complete analysis with scores and detailed feedback. Use whichever format (JSON or structured text) that works best for you, but ensure all required information is included and clearly labeled.
 `;
   }
 
   private parseAnalysis(analysis: string, originalTranscript: string): ScoreResult {
+    console.log('📥 Raw AI response received, length:', analysis.length);
+    console.log('📥 First 500 chars:', analysis.substring(0, 500));
+    console.log('📥 Last 500 chars:', analysis.substring(Math.max(0, analysis.length - 500)));
+    
+    // Try JSON parsing first, then fallback to text parsing
+    try {
+      return this.parseAsJson(analysis, originalTranscript);
+    } catch (jsonError) {
+      console.warn('⚠️ JSON parsing failed, attempting text parsing:', jsonError instanceof Error ? jsonError.message : String(jsonError));
+      try {
+        return this.parseAsText(analysis, originalTranscript);
+      } catch (textError) {
+        console.error('❌ Both JSON and text parsing failed, using fallback');
+        return this.createFallbackResult(analysis, originalTranscript);
+      }
+    }
+  }
+
+  private parseAsJson(analysis: string, originalTranscript: string): ScoreResult {
     try {
       // Clean the response - remove markdown code blocks if present
       let cleanedAnalysis = analysis.trim();
       
-      // Remove markdown code fences if present
+      // Remove common prefixes like "Full response:", "Response:", etc.
+      cleanedAnalysis = cleanedAnalysis.replace(/^(Full\s+response|Response|Here\s+is|Analysis):\s*/i, '');
+      
+      // Remove markdown code fences if present (```json or ```)
       cleanedAnalysis = cleanedAnalysis.replace(/^```json\s*/i, '').replace(/^```\s*/i, '');
       cleanedAnalysis = cleanedAnalysis.replace(/\s*```\s*$/i, '');
       
-      // Extract JSON from the response - try to find the JSON object
-      let jsonMatch = cleanedAnalysis.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        console.error('No JSON found in AI response. Response:', analysis.substring(0, 500));
-        throw new Error('No JSON found in AI response. The AI may not have returned valid JSON format.');
+      // Find JSON object boundaries - look for first { and last }
+      const firstBrace = cleanedAnalysis.indexOf('{');
+      const lastBrace = cleanedAnalysis.lastIndexOf('}');
+      
+      if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
+        throw new Error('No JSON braces found in response');
       }
 
-      let jsonString = jsonMatch[0];
+      // Extract JSON using brace balancing
+      let braceCount = 0;
+      let jsonStart = firstBrace;
+      let jsonEnd = firstBrace;
+      let inString = false;
+      let escaped = false;
+      
+      for (let i = firstBrace; i < cleanedAnalysis.length; i++) {
+        const char = cleanedAnalysis[i];
+        if (char === '\\' && inString) {
+          escaped = !escaped;
+          continue;
+        }
+        if (char === '"' && !escaped) {
+          inString = !inString;
+          escaped = false;
+          continue;
+        }
+        escaped = false;
+        if (!inString) {
+          if (char === '{') {
+            if (braceCount === 0) jsonStart = i;
+            braceCount++;
+          } else if (char === '}') {
+            braceCount--;
+            if (braceCount === 0) {
+              jsonEnd = i;
+              break;
+            }
+          }
+        }
+      }
+      
+      let jsonString = '';
+      if (braceCount === 0 && jsonEnd > jsonStart) {
+        jsonString = cleanedAnalysis.substring(jsonStart, jsonEnd + 1);
+        console.log('✅ Found balanced JSON object');
+      } else {
+        jsonString = cleanedAnalysis.substring(firstBrace, lastBrace + 1);
+        console.warn('⚠️ Using fallback extraction');
+      }
+
+      jsonString = this.balanceJsonBraces(jsonString);
       let parsed;
       
-      // Try to parse the JSON with multiple fallback strategies
       try {
         parsed = JSON.parse(jsonString);
+        console.log('✅ Successfully parsed JSON on first attempt');
       } catch (parseError) {
-        console.warn('Initial JSON parse failed, attempting to fix common issues...');
-        
-        // Try to fix common JSON issues
+        console.warn('⚠️ Initial JSON parse failed, attempting to fix...');
         try {
           let fixedJson = this.repairJsonString(jsonString);
           parsed = JSON.parse(fixedJson);
-          console.log('Successfully parsed JSON after fixing common issues');
+          console.log('✅ Successfully parsed JSON after fixing');
         } catch (fixError) {
-          // If fixing doesn't work, try to extract and parse just the essential parts
-          console.error('JSON parse error after fixes:', fixError);
-          console.error('JSON string length:', jsonString.length);
-          console.error('JSON preview (first 1000 chars):', jsonString.substring(0, 1000));
-          console.error('JSON preview (last 1000 chars):', jsonString.substring(Math.max(0, jsonString.length - 1000)));
-          
-          // Try to find the error position and show context
-          if (parseError instanceof SyntaxError && 'message' in parseError) {
-            const errorMsg = parseError.message;
-            const positionMatch = errorMsg.match(/position (\d+)/);
-            if (positionMatch) {
-              const position = parseInt(positionMatch[1]);
-              const start = Math.max(0, position - 100);
-              const end = Math.min(jsonString.length, position + 100);
-              console.error('Error context around position', position, ':', jsonString.substring(start, end));
-            }
-          }
-          
-          // Last resort: try to construct a minimal valid response
           try {
             const minimalJson = this.extractMinimalValidJson(jsonString);
             parsed = JSON.parse(minimalJson);
-            console.log('Successfully parsed minimal JSON');
+            console.log('✅ Successfully parsed minimal JSON');
           } catch (minimalError) {
-            throw new Error(`Failed to parse AI response as JSON. The response may contain invalid characters or be truncated. Error: ${parseError instanceof Error ? parseError.message : 'Unknown error'}`);
+            throw new Error(`Failed to parse AI response as JSON. Error: ${parseError instanceof Error ? parseError.message : 'Unknown error'}`);
           }
         }
       }
 
-      const logicScore = parsed.logic_score || 0;
-      const rhetoricScore = parsed.rhetoric_score || 0;
-      const empathyScore = parsed.empathy_score || 0;
-      const deliveryScore = parsed.delivery_score || 0;
-      const totalScore = logicScore + rhetoricScore + empathyScore + deliveryScore;
-
-      // Parse enhanced feedback
-      const enhancedFeedback = parsed.enhanced_feedback || {};
-      const argumentAnalysis = enhancedFeedback.argument_analysis || {};
-      const dataEnhancements = enhancedFeedback.data_enhancements || {};
-      const counterArgs = enhancedFeedback.counter_arguments || [];
-      const defenseStrats = enhancedFeedback.defense_strategies || [];
-
-      return {
-        score: {
-          logic: logicScore,
-          rhetoric: rhetoricScore,
-          empathy: empathyScore,
-          delivery: deliveryScore,
-          total: totalScore
-        },
-        feedback: {
-          logic: Array.isArray(parsed.logic_feedback) ? parsed.logic_feedback.join(' ') : 'No logic feedback provided.',
-          rhetoric: Array.isArray(parsed.rhetoric_feedback) ? parsed.rhetoric_feedback.join(' ') : 'No rhetoric feedback provided.',
-          empathy: Array.isArray(parsed.empathy_feedback) ? parsed.empathy_feedback.join(' ') : 'No empathy feedback provided.',
-          delivery: Array.isArray(parsed.delivery_feedback) ? parsed.delivery_feedback.join(' ') : 'No delivery feedback provided.',
-          overall: `Your speech scored ${totalScore}/30. Focus on improving areas with lower scores for better performance.`
-        },
-        missingPoints: parsed.missing_points || [],
-        enhancedArgument: parsed.enhanced_argument || '',
-        enhancedFeedback: {
-          argumentAnalysis: {
-            logicalStructure: argumentAnalysis.logical_structure || '',
-            evidenceQuality: argumentAnalysis.evidence_quality || '',
-            clarityScore: argumentAnalysis.clarity_score || 0,
-            persuasiveness: argumentAnalysis.persuasiveness || ''
-          },
-          dataEnhancements: {
-            statisticalSupport: dataEnhancements.statistical_support || [],
-            expertCitations: dataEnhancements.expert_citations || [],
-            caseStudies: dataEnhancements.case_studies || [],
-            quantifiableClaims: dataEnhancements.quantifiable_claims || []
-          },
-          counterArguments: counterArgs.map((arg: any) => ({
-            rebuttal: arg.rebuttal || '',
-            strengthLevel: arg.strength_level || 'Medium',
-            supportingEvidence: arg.supporting_evidence || '',
-            commonSources: arg.common_sources || '',
-            keyPoints: arg.key_points || []
-          })),
-          defenseStrategies: defenseStrats.map((strategy: any) => ({
-            preemptiveDefense: strategy.preemptive_defense || '',
-            directResponse: strategy.direct_response || '',
-            redirectTechnique: strategy.redirect_technique || '',
-            evidenceArsenal: strategy.evidence_arsenal || '',
-            keyPoints: strategy.key_points || []
-          })),
-          strategicRecommendations: enhancedFeedback.strategic_recommendations || []
-        },
-        transcript: originalTranscript
-      };
+      return this.buildScoreResultFromParsed(parsed, originalTranscript);
     } catch (error) {
-      console.error('Failed to parse AI analysis:', error);
-      throw new Error('Failed to parse AI response');
+      throw error;
     }
+  }
+
+  private parseAsText(analysis: string, originalTranscript: string): ScoreResult {
+    console.log('📝 Parsing as structured text...');
+    
+    const text = analysis.trim();
+    
+    // Extract scores using regex patterns
+    const extractScore = (label: string, defaultValue: number = 0): number => {
+      const patterns = [
+        new RegExp(`${label}\\s*[:=]\\s*(\\d+)`, 'i'),
+        new RegExp(`${label}\\s+(\\d+)`, 'i'),
+        new RegExp(`"${label.toLowerCase().replace(/\s+/g, '_')}"\\s*[:=]\\s*(\\d+)`, 'i')
+      ];
+      
+      for (const pattern of patterns) {
+        const match = text.match(pattern);
+        if (match && match[1]) {
+          const score = parseInt(match[1], 10);
+          if (!isNaN(score) && score >= 0 && score <= 10) {
+            return score;
+          }
+        }
+      }
+      return defaultValue;
+    };
+
+    // Extract feedback arrays
+    const extractFeedback = (label: string): string[] => {
+      const patterns = [
+        new RegExp(`${label}\\s*[:\\n]\\s*([\\s\\S]*?)(?=\\n\\n|\\n[A-Z]|$)`, 'i'),
+        new RegExp(`"${label.toLowerCase().replace(/\s+/g, '_')}"\\s*[:\\[\\]]\\s*\\[([\\s\\S]*?)\\]`, 'i')
+      ];
+      
+      for (const pattern of patterns) {
+        const match = text.match(pattern);
+        if (match && match[1]) {
+          const items = match[1]
+            .split(/[-•*]\s*|\d+\.\s*|,\s*"/)
+            .map(item => item.trim())
+            .filter(item => item.length > 0 && !item.match(/^[\[\]"]+$/));
+          
+          if (items.length > 0) {
+            return items;
+          }
+        }
+      }
+      
+      const labelIndex = text.toLowerCase().indexOf(label.toLowerCase());
+      if (labelIndex !== -1) {
+        const afterLabel = text.substring(labelIndex + label.length);
+        const nextSection = afterLabel.match(/^[:\n]\s*([^\n]+(?:\n[^\n]+)*)/);
+        if (nextSection && nextSection[1]) {
+          return [nextSection[1].trim()];
+        }
+      }
+      
+      return [];
+    };
+
+    const logicScore = extractScore('logic score|logic_score', 0);
+    const rhetoricScore = extractScore('rhetoric score|rhetoric_score', 0);
+    const empathyScore = extractScore('empathy score|empathy_score', 0);
+    const deliveryScore = extractScore('delivery score|delivery_score', 0);
+
+    const logicFeedback = extractFeedback('logic feedback|logic_feedback');
+    const rhetoricFeedback = extractFeedback('rhetoric feedback|rhetoric_feedback');
+    const empathyFeedback = extractFeedback('empathy feedback|empathy_feedback');
+    const deliveryFeedback = extractFeedback('delivery feedback|delivery_feedback');
+
+    // Extract missing points
+    const missingPointsMatch = text.match(/(?:missing points|missing_points)[:\n]\s*([\s\S]*?)(?=\n\n|\n[A-Z]{2,}|enhanced|counter|defense|$)/i);
+    const missingPoints = missingPointsMatch 
+      ? missingPointsMatch[1].split(/[-•*]\s*|\d+\.\s*|,\s*"/).map(p => p.trim().replace(/^["']|["']$/g, '')).filter(p => p.length > 0 && !p.match(/^[\[\]{}]+$/))
+      : [];
+
+    // Extract enhanced argument
+    const enhancedArgMatch = text.match(/(?:enhanced argument|enhanced_argument)[:\n]\s*([\s\S]*?)(?=\n\n|\n[A-Z]{2,}|enhanced feedback|counter|defense|$)/i);
+    const enhancedArgument = enhancedArgMatch ? enhancedArgMatch[1].trim() : '';
+
+    // Extract counter arguments
+    const extractCounterArguments = (): any[] => {
+      const counters: any[] = [];
+      const counterRegex = /(?:counter.?arguments?|counter.?args?)[:\n]\s*/i;
+      const counterMatch = text.match(counterRegex);
+      
+      if (counterMatch) {
+        const counterSection = text.substring(counterMatch.index! + counterMatch[0].length);
+        const counterPatterns = [
+          /counterargument\s*#?\s*(\d+)[:\n]\s*([\s\S]*?)(?=counterargument|defense|$)/gi,
+          /rebuttal\s*#?\s*(\d+)[:\n]\s*([\s\S]*?)(?=rebuttal|defense|$)/gi
+        ];
+        
+        for (const pattern of counterPatterns) {
+          let match;
+          while ((match = pattern.exec(counterSection)) !== null && counters.length < 3) {
+            const content = match[2] || match[0];
+            const rebuttalMatch = content.match(/(?:rebuttal|the attack)[:\n]\s*([^\n]+(?:\n[^\n]+)*)/i);
+            const strengthMatch = content.match(/(?:strength|threat)[:\n]\s*(high|medium|low)/i);
+            
+            counters.push({
+              rebuttal: rebuttalMatch ? rebuttalMatch[1].trim() : content.substring(0, 200).trim(),
+              strength_level: strengthMatch ? strengthMatch[1].charAt(0).toUpperCase() + strengthMatch[1].slice(1).toLowerCase() : 'Medium',
+              supporting_logic: '',
+              logical_frameworks: '',
+              key_points: []
+            });
+          }
+        }
+      }
+      
+      if (counters.length === 0) {
+        const jsonCounterMatch = text.match(/"counter_arguments"\s*:\s*\[([\s\S]*?)\]/i);
+        if (jsonCounterMatch) {
+          const counterObjects = jsonCounterMatch[1].match(/\{[\s\S]*?\}/g);
+          if (counterObjects) {
+            counterObjects.slice(0, 3).forEach(objStr => {
+              const rebuttalMatch = objStr.match(/"rebuttal"\\s*:\\s*"([^"]+)"/i);
+              const strengthMatch = objStr.match(/"strength_level"\\s*:\\s*"([^"]+)"/i);
+              counters.push({
+                rebuttal: rebuttalMatch ? rebuttalMatch[1] : 'Counterargument provided',
+                strength_level: strengthMatch ? strengthMatch[1] : 'Medium',
+                supporting_logic: '',
+                logical_frameworks: '',
+                key_points: []
+              });
+            });
+          }
+        }
+      }
+      
+      while (counters.length < 3) {
+        counters.push({
+          rebuttal: `Counterargument ${counters.length + 1}: Analysis of potential opposing views`,
+          strength_level: 'Medium',
+          supporting_logic: '',
+          logical_frameworks: '',
+          key_points: []
+        });
+      }
+      
+      return counters.slice(0, 3);
+    };
+
+    // Extract defense strategies
+    const extractDefenseStrategies = (): any[] => {
+      const defenses: any[] = [];
+      const defenseRegex = /(?:defense.?strategies?|defense)[:\n]\s*/i;
+      const defenseMatch = text.match(defenseRegex);
+      
+      if (defenseMatch) {
+        const defenseSection = text.substring(defenseMatch.index! + defenseMatch[0].length);
+        const defensePatterns = [
+          /defense\s*strategy\s*#?\s*(\d+)[:\n]\s*([\s\S]*?)(?=defense\s*strategy|strategic|$)/gi,
+          /strategy\s*#?\s*(\d+)[:\n]\s*([\s\S]*?)(?=strategy|strategic|$)/gi
+        ];
+        
+        for (const pattern of defensePatterns) {
+          let match;
+          while ((match = pattern.exec(defenseSection)) !== null && defenses.length < 3) {
+            const content = match[2] || match[0];
+            const preemptiveMatch = content.match(/(?:preemptive|before)[:\n]\s*([^\n]+(?:\n[^\n]+)*)/i);
+            const directMatch = content.match(/(?:direct|when confronted)[:\n]\s*([^\n]+(?:\n[^\n]+)*)/i);
+            const redirectMatch = content.match(/(?:redirect|pivot)[:\n]\s*([^\n]+(?:\n[^\n]+)*)/i);
+            
+            defenses.push({
+              preemptive_defense: preemptiveMatch ? preemptiveMatch[1].trim() : content.substring(0, 150).trim(),
+              direct_response: directMatch ? directMatch[1].trim() : '',
+              redirect_technique: redirectMatch ? redirectMatch[1].trim() : '',
+              logical_arsenal: '',
+              key_points: []
+            });
+          }
+        }
+      }
+      
+      if (defenses.length === 0) {
+        const jsonDefenseMatch = text.match(/"defense_strategies"\s*:\s*\[([\s\S]*?)\]/i);
+        if (jsonDefenseMatch) {
+          const defenseObjects = jsonDefenseMatch[1].match(/\{[\s\S]*?\}/g);
+          if (defenseObjects) {
+            defenseObjects.slice(0, 3).forEach(objStr => {
+              const preemptiveMatch = objStr.match(/"preemptive_defense"\\s*:\\s*"([^"]+)"/i);
+              const directMatch = objStr.match(/"direct_response"\\s*:\\s*"([^"]+)"/i);
+              defenses.push({
+                preemptive_defense: preemptiveMatch ? preemptiveMatch[1] : 'Pre-emptive defense strategy',
+                direct_response: directMatch ? directMatch[1] : '',
+                redirect_technique: '',
+                logical_arsenal: '',
+                key_points: []
+              });
+            });
+          }
+        }
+      }
+      
+      while (defenses.length < 3) {
+        defenses.push({
+          preemptive_defense: `Defense Strategy ${defenses.length + 1}: How to counter opposing arguments`,
+          direct_response: '',
+          redirect_technique: '',
+          logical_arsenal: '',
+          key_points: []
+        });
+      }
+      
+      return defenses.slice(0, 3);
+    };
+
+    const counterArgs = extractCounterArguments();
+    const defenseStrats = extractDefenseStrategies();
+
+    // Extract argument analysis
+    const extractArgumentAnalysis = () => {
+      const logicalStructureMatch = text.match(/(?:logical.?structure)[:\n]\s*([^\n]+(?:\n[^\n]+)*)/i);
+      const reasoningMatch = text.match(/(?:reasoning.?quality)[:\n]\s*([^\n]+(?:\n[^\n]+)*)/i);
+      const clarityMatch = text.match(/(?:clarity.?score)[:\n]\s*(\d+)/i);
+      const persuasivenessMatch = text.match(/(?:persuasiveness)[:\n]\s*([^\n]+(?:\n[^\n]+)*)/i);
+      
+      return {
+        logical_structure: logicalStructureMatch ? logicalStructureMatch[1].trim() : '',
+        reasoning_quality: reasoningMatch ? reasoningMatch[1].trim() : '',
+        clarity_score: clarityMatch ? parseInt(clarityMatch[1], 10) : 5,
+        persuasiveness: persuasivenessMatch ? persuasivenessMatch[1].trim() : ''
+      };
+    };
+
+    const argumentAnalysis = extractArgumentAnalysis();
+
+    // Extract strategic recommendations
+    const strategicMatch = text.match(/(?:strategic.?recommendations?|recommendations?)[:\n]\s*([\s\S]*?)(?=\n\n|\n[A-Z]{2,}|$)/i);
+    const strategicRecommendations = strategicMatch
+      ? strategicMatch[1].split(/[-•*]\s*|\d+\.\s*|,\s*"/).map(r => r.trim().replace(/^["']|["']$/g, '')).filter(r => r.length > 0 && !r.match(/^[\[\]{}]+$/))
+      : [];
+
+    console.log('✅ Successfully parsed as structured text');
+    
+    const parsed = {
+      logic_score: logicScore,
+      rhetoric_score: rhetoricScore,
+      empathy_score: empathyScore,
+      delivery_score: deliveryScore,
+      logic_feedback: logicFeedback.length > 0 ? logicFeedback : ['No specific logic feedback provided.'],
+      rhetoric_feedback: rhetoricFeedback.length > 0 ? rhetoricFeedback : ['No specific rhetoric feedback provided.'],
+      empathy_feedback: empathyFeedback.length > 0 ? empathyFeedback : ['No specific empathy feedback provided.'],
+      delivery_feedback: deliveryFeedback.length > 0 ? deliveryFeedback : ['No specific delivery feedback provided.'],
+      missing_points: missingPoints.length > 0 ? missingPoints : ['Review your logical structure', 'Add more specific examples', 'Strengthen your premises'],
+      enhanced_argument: enhancedArgument || 'Enhanced argument analysis would be provided here.',
+      enhanced_feedback: {
+        argument_analysis: argumentAnalysis,
+        data_enhancements: {
+          statistical_support: [],
+          expert_citations: [],
+          case_studies: [],
+          quantifiable_claims: []
+        },
+        counter_arguments: counterArgs,
+        defense_strategies: defenseStrats,
+        strategic_recommendations: strategicRecommendations.length > 0 ? strategicRecommendations : ['Focus on logical structure', 'Address counterarguments', 'Strengthen your reasoning']
+      }
+    };
+
+    return this.buildScoreResultFromParsed(parsed, originalTranscript);
+  }
+
+  private createFallbackResult(analysis: string, originalTranscript: string): ScoreResult {
+    console.log('🔄 Creating fallback result from raw text');
+    
+    const scoreMatches = analysis.match(/(\d+)\s*(?:out of|\/)\s*(?:10|5)/gi);
+    const scores = scoreMatches ? scoreMatches.map(m => parseInt(m.match(/\d+/)?.[0] || '0', 10)) : [];
+    
+    const fullText = analysis.length > 2000 ? analysis.substring(0, 2000) + '...' : analysis;
+    
+    return {
+      score: {
+        logic: scores[0] || 0,
+        rhetoric: scores[1] || 0,
+        empathy: scores[2] || 0,
+        delivery: scores[3] || 0,
+        total: scores.slice(0, 4).reduce((a, b) => a + b, 0)
+      },
+      feedback: {
+        logic: this.extractRelevantSection(analysis, 'logic') || 'Analysis provided in full response below.',
+        rhetoric: this.extractRelevantSection(analysis, 'rhetoric') || 'Analysis provided in full response below.',
+        empathy: this.extractRelevantSection(analysis, 'empathy') || 'Analysis provided in full response below.',
+        delivery: this.extractRelevantSection(analysis, 'delivery') || 'Analysis provided in full response below.',
+        overall: `Your speech has been analyzed. ${fullText.substring(0, 200)}...`
+      },
+      missingPoints: ["Review logical structure", "Add specific examples", "Strengthen premises"],
+      enhancedArgument: analysis.length > 500 ? analysis.substring(0, 500) + '...' : analysis,
+      enhancedFeedback: {
+        argumentAnalysis: {
+          logicalStructure: this.extractRelevantSection(analysis, 'logical structure') || 'Analysis of logical structure',
+          evidenceQuality: this.extractRelevantSection(analysis, 'evidence') || 'Analysis of evidence quality',
+          clarityScore: 5,
+          persuasiveness: this.extractRelevantSection(analysis, 'persuasive') || 'Analysis of persuasiveness'
+        },
+        dataEnhancements: {
+          statisticalSupport: [],
+          expertCitations: [],
+          caseStudies: [],
+          quantifiableClaims: []
+        },
+        counterArguments: [
+          {
+            rebuttal: 'Potential counterargument: Review the analysis above for opposing viewpoints',
+            strengthLevel: 'Medium',
+            supportingEvidence: '',
+            commonSources: '',
+            keyPoints: []
+          },
+          {
+            rebuttal: 'Another counterargument: Consider alternative perspectives',
+            strengthLevel: 'Medium',
+            supportingEvidence: '',
+            commonSources: '',
+            keyPoints: []
+          },
+          {
+            rebuttal: 'Third counterargument: Evaluate different reasoning approaches',
+            strengthLevel: 'Medium',
+            supportingEvidence: '',
+            commonSources: '',
+            keyPoints: []
+          }
+        ],
+        defenseStrategies: [
+          {
+            preemptiveDefense: 'Pre-emptive defense: Address concerns proactively',
+            directResponse: 'Direct response: Counter opposing arguments logically',
+            redirectTechnique: 'Redirect: Reframe the discussion to your strengths',
+            evidenceArsenal: 'Evidence: Use logical reasoning and structured arguments',
+            keyPoints: []
+          },
+          {
+            preemptiveDefense: 'Pre-emptive defense: Anticipate and address counterarguments',
+            directResponse: 'Direct response: Provide logical refutation',
+            redirectTechnique: 'Redirect: Shift focus to stronger points',
+            evidenceArsenal: 'Evidence: Strengthen your logical framework',
+            keyPoints: []
+          },
+          {
+            preemptiveDefense: 'Pre-emptive defense: Establish logical foundation early',
+            directResponse: 'Direct response: Defend your reasoning structure',
+            redirectTechnique: 'Redirect: Emphasize your logical strengths',
+            evidenceArsenal: 'Evidence: Use reasoning frameworks effectively',
+            keyPoints: []
+          }
+        ],
+        strategicRecommendations: ['Focus on logical structure', 'Address counterarguments', 'Strengthen reasoning', 'Use clear premises', 'Avoid logical fallacies']
+      },
+      transcript: originalTranscript
+    };
+  }
+
+  private extractRelevantSection(text: string, keyword: string): string {
+    const lowerText = text.toLowerCase();
+    const keywordIndex = lowerText.indexOf(keyword);
+    if (keywordIndex === -1) return '';
+    
+    const start = Math.max(0, keywordIndex - 50);
+    const end = Math.min(text.length, keywordIndex + 500);
+    return text.substring(start, end).trim();
+  }
+
+  private buildScoreResultFromParsed(parsed: any, originalTranscript: string): ScoreResult {
+    const logicScore = parsed.logic_score || 0;
+    const rhetoricScore = parsed.rhetoric_score || 0;
+    const empathyScore = parsed.empathy_score || 0;
+    const deliveryScore = parsed.delivery_score || 0;
+    const totalScore = logicScore + rhetoricScore + empathyScore + deliveryScore;
+
+    // Parse enhanced feedback
+    const enhancedFeedback = parsed.enhanced_feedback || {};
+    const argumentAnalysis = enhancedFeedback.argument_analysis || {};
+    const dataEnhancements = enhancedFeedback.data_enhancements || {};
+    const counterArgs = enhancedFeedback.counter_arguments || [];
+    const defenseStrats = enhancedFeedback.defense_strategies || [];
+
+    return {
+      score: {
+        logic: logicScore,
+        rhetoric: rhetoricScore,
+        empathy: empathyScore,
+        delivery: deliveryScore,
+        total: totalScore
+      },
+      feedback: {
+        logic: Array.isArray(parsed.logic_feedback) ? parsed.logic_feedback.join(' ') : (typeof parsed.logic_feedback === 'string' ? parsed.logic_feedback : 'No logic feedback provided.'),
+        rhetoric: Array.isArray(parsed.rhetoric_feedback) ? parsed.rhetoric_feedback.join(' ') : (typeof parsed.rhetoric_feedback === 'string' ? parsed.rhetoric_feedback : 'No rhetoric feedback provided.'),
+        empathy: Array.isArray(parsed.empathy_feedback) ? parsed.empathy_feedback.join(' ') : (typeof parsed.empathy_feedback === 'string' ? parsed.empathy_feedback : 'No empathy feedback provided.'),
+        delivery: Array.isArray(parsed.delivery_feedback) ? parsed.delivery_feedback.join(' ') : (typeof parsed.delivery_feedback === 'string' ? parsed.delivery_feedback : 'No delivery feedback provided.'),
+        overall: `Your speech scored ${totalScore}/30. Focus on improving areas with lower scores for better performance.`
+      },
+      missingPoints: parsed.missing_points || [],
+      enhancedArgument: parsed.enhanced_argument || '',
+      enhancedFeedback: {
+        argumentAnalysis: {
+          logicalStructure: argumentAnalysis.logical_structure || argumentAnalysis.reasoning_quality || '',
+          evidenceQuality: argumentAnalysis.evidence_quality || '',
+          clarityScore: argumentAnalysis.clarity_score || 0,
+          persuasiveness: argumentAnalysis.persuasiveness || ''
+        },
+        dataEnhancements: {
+          statisticalSupport: dataEnhancements.statistical_support || [],
+          expertCitations: dataEnhancements.expert_citations || [],
+          caseStudies: dataEnhancements.case_studies || [],
+          quantifiableClaims: dataEnhancements.quantifiable_claims || []
+        },
+        counterArguments: counterArgs.map((arg: any) => ({
+          rebuttal: arg.rebuttal || '',
+          strengthLevel: arg.strength_level || 'Medium',
+          supportingEvidence: arg.supporting_evidence || arg.supporting_logic || '',
+          commonSources: arg.common_sources || '',
+          keyPoints: arg.key_points || []
+        })),
+        defenseStrategies: defenseStrats.map((strategy: any) => ({
+          preemptiveDefense: strategy.preemptive_defense || '',
+          directResponse: strategy.direct_response || '',
+          redirectTechnique: strategy.redirect_technique || '',
+          evidenceArsenal: strategy.evidence_arsenal || strategy.logical_arsenal || '',
+          keyPoints: strategy.key_points || []
+        })),
+        strategicRecommendations: enhancedFeedback.strategic_recommendations || []
+      },
+      transcript: originalTranscript
+    };
   }
 
   private repairJsonString(json: string): string {

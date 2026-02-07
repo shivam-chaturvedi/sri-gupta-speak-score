@@ -59,6 +59,8 @@ export function VoiceRecorder({
   const recognitionTranscriptRef = useRef("");
   const currentTranscriptRef = useRef("");
   const isRecordingRef = useRef(false);
+  const processedFinalChunksRef = useRef<Set<string>>(new Set()); // Track processed final chunks to avoid duplicates
+  const STORAGE_KEY = `dialecta_transcript_${motion.topic}_${stance || 'neutral'}`;
 
   const showRecorderNotice = (tone: RecorderNotice['tone'], title: string, description?: string) => {
     setRecorderNotice({ tone, title, description });
@@ -87,11 +89,38 @@ export function VoiceRecorder({
     setCurrentTranscript(value);
   };
 
-  const joinTranscript = (...parts: string[]) =>
-    parts
+  // Utility function to remove consecutive duplicate words
+  const removeConsecutiveDuplicates = (text: string): string => {
+    if (!text || typeof text !== 'string') return text || '';
+    if (text.trim().length === 0) return text;
+
+    try {
+      const words = text.split(/\s+/);
+      const result: string[] = [];
+      let lastWord = '';
+
+      for (const word of words) {
+        const trimmedWord = word.trim().toLowerCase();
+        if (trimmedWord && trimmedWord !== lastWord) {
+          result.push(word);
+          lastWord = trimmedWord;
+        }
+      }
+      const cleaned = result.join(' ');
+      return cleaned.length > 0 ? cleaned : text;
+    } catch (error) {
+      console.warn('Error removing consecutive duplicates:', error);
+      return text;
+    }
+  };
+
+  const joinTranscript = (...parts: string[]) => {
+    const joined = parts
       .map(part => part?.trim())
       .filter(Boolean)
       .join(" ");
+    return removeConsecutiveDuplicates(joined);
+  };
   
   // Check browser support for speech recognition
   useEffect(() => {
@@ -154,22 +183,36 @@ export function VoiceRecorder({
           }
         }
         
-        // Update current interim transcript
+        // Update current interim transcript (with deduplication)
         if (interimTranscript) {
-          updateCurrentTranscript(interimTranscript);
+          const cleanedInterim = removeConsecutiveDuplicates(interimTranscript);
+          updateCurrentTranscript(cleanedInterim);
         }
         
-        // Process final results
+        // Process final results (with deduplication and duplicate check)
         if (finalTranscript.trim()) {
-          const accumulatedFinal = joinTranscript(recognitionTranscriptRef.current, finalTranscript.trim());
-          updateRecognitionTranscript(accumulatedFinal);
-          console.log('✅ Final transcript chunk captured:', finalTranscript.trim());
-          console.log('📝 Accumulated final transcript:', accumulatedFinal);
+          const newFinalText = removeConsecutiveDuplicates(finalTranscript.trim());
+          
+          // Check if we've already processed this exact chunk
+          if (!processedFinalChunksRef.current.has(newFinalText)) {
+            processedFinalChunksRef.current.add(newFinalText);
+            const accumulatedFinal = joinTranscript(recognitionTranscriptRef.current, newFinalText);
+            updateRecognitionTranscript(accumulatedFinal);
+            console.log('✅ Final transcript chunk captured:', newFinalText);
+            console.log('📝 Accumulated final transcript:', accumulatedFinal);
+            
+            // Update localStorage
+            try {
+              localStorage.setItem(STORAGE_KEY, accumulatedFinal);
+            } catch (e) {
+              console.warn('Failed to save transcript to localStorage:', e);
+            }
+          }
         }
         
-        // Update display transcript (final + interim)
+        // Update display transcript (final + interim) with deduplication
         const displayValue = interimTranscript
-          ? joinTranscript(recognitionTranscriptRef.current, interimTranscript)
+          ? removeConsecutiveDuplicates(joinTranscript(recognitionTranscriptRef.current, interimTranscript))
           : recognitionTranscriptRef.current;
         updateTranscript(displayValue);
       };
@@ -218,10 +261,17 @@ export function VoiceRecorder({
       recognitionInstance.onend = () => {
         setIsListening(false);
         updateCurrentTranscript("");
-        const finalTranscript = recognitionTranscriptRef.current.trim();
+        const finalTranscript = removeConsecutiveDuplicates(recognitionTranscriptRef.current.trim());
         if (finalTranscript) {
           updateTranscript(finalTranscript);
           console.log('✅ Speech recognition ended. Final transcript:', finalTranscript.substring(0, 100));
+          
+          // Update localStorage
+          try {
+            localStorage.setItem(STORAGE_KEY, finalTranscript);
+          } catch (e) {
+            console.warn('Failed to save transcript to localStorage:', e);
+          }
         }
         console.log('Speech recognition ended');
         
@@ -272,10 +322,18 @@ export function VoiceRecorder({
       const transcript = await transcribeWithAssemblyAI(audioBlob);
       
       if (transcript && transcript.trim().length > 0) {
-        updateTranscript(transcript);
-        updateRecognitionTranscript(transcript);
-        console.log('✅ AssemblyAI transcription successful, length:', transcript.length);
+        const cleanedTranscript = removeConsecutiveDuplicates(transcript.trim());
+        updateTranscript(cleanedTranscript);
+        updateRecognitionTranscript(cleanedTranscript);
+        console.log('✅ AssemblyAI transcription successful, length:', cleanedTranscript.length);
         showInfoNotice("Transcription Complete", "Your speech has been transcribed successfully.");
+        
+        // Update localStorage
+        try {
+          localStorage.setItem(STORAGE_KEY, cleanedTranscript);
+        } catch (e) {
+          console.warn('Failed to save transcript to localStorage:', e);
+        }
       } else {
         throw new Error('No transcript returned from AssemblyAI');
       }
@@ -321,6 +379,14 @@ export function VoiceRecorder({
 
   const startPrep = async () => {
     try {
+      // Clear processed chunks and localStorage for new session
+      processedFinalChunksRef.current.clear();
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+      } catch (e) {
+        console.warn('Failed to clear localStorage:', e);
+      }
+      
       console.log('Requesting microphone access for recording...');
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       console.log('✅ Microphone access granted for recording, stream active:', stream.active);
@@ -378,11 +444,11 @@ export function VoiceRecorder({
         }
         
         // Get the final transcript - use recognitionTranscript which has all final results
-        let finalTranscript = recognitionTranscriptRef.current.trim();
+        let finalTranscript = removeConsecutiveDuplicates(recognitionTranscriptRef.current.trim());
         
         // If recognitionTranscript is empty, try transcript state
         if (!finalTranscript || finalTranscript.length === 0) {
-          finalTranscript = transcriptRef.current.trim();
+          finalTranscript = removeConsecutiveDuplicates(transcriptRef.current.trim());
         }
         
         // Remove any error messages from transcript before checking
@@ -597,6 +663,14 @@ export function VoiceRecorder({
     updateCurrentTranscript("");
     setShowTranscribeButton(false);
     
+    // Clear processed chunks and localStorage
+    processedFinalChunksRef.current.clear();
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch (e) {
+      console.warn('Failed to clear localStorage:', e);
+    }
+    
     if (prepTimerRef.current) clearInterval(prepTimerRef.current);
     if (recordTimerRef.current) clearInterval(recordTimerRef.current);
     if (audioRef.current) audioRef.current.pause();
@@ -631,14 +705,16 @@ export function VoiceRecorder({
         finalTranscript = transcriptRef.current.trim();
       }
       
-      // Clean any error messages from transcript
-      const cleanedForSubmit = finalTranscript
-        .replace(/Please speak clearly\. No transcript was captured\./g, '')
-        .replace(/No transcript was captured/g, '')
-        .replace(/please speak clearly/gi, '')
-        .replace(/Transcribing audio\.\.\. Please wait\./g, '')
-        .replace(/Transcription.*?\./g, '')
-        .trim();
+      // Clean any error messages from transcript and remove duplicates
+      const cleanedForSubmit = removeConsecutiveDuplicates(
+        finalTranscript
+          .replace(/Please speak clearly\. No transcript was captured\./g, '')
+          .replace(/No transcript was captured/g, '')
+          .replace(/please speak clearly/gi, '')
+          .replace(/Transcribing audio\.\.\. Please wait\./g, '')
+          .replace(/Transcription.*?\./g, '')
+          .trim()
+      );
       
       console.log('📤 Submitting recording:');
       console.log('  Original transcript:', finalTranscript.substring(0, 100));

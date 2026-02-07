@@ -25,11 +25,6 @@ import {
 
 type AppState = "home" | "recording" | "results";
 
-interface AnalysisErrorState {
-  title: string;
-  description: string;
-}
-
 interface SessionData {
   motion: Motion;
   duration: number;
@@ -44,7 +39,6 @@ const Index = () => {
   const [scoreData, setScoreData] = useState<any>(null);
   const [showApiKeyModal, setShowApiKeyModal] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [analysisError, setAnalysisError] = useState<AnalysisErrorState | null>(null);
   const [recorderResetCounter, setRecorderResetCounter] = useState(0);
   const [selectedTheme, setSelectedTheme] = useState<string>("All Themes");
   const [motions, setMotions] = useState(() => {
@@ -79,22 +73,14 @@ const Index = () => {
   const resetRecorderComponent = () => setRecorderResetCounter(prev => prev + 1);
 
   const handleStartSpeech = (motion: Motion, duration: number, stance?: string) => {
-    setAnalysisError(null);
     setSessionData({ motion, duration, stance });
     setCurrentState("recording");
-  };
-
-  const handleRestartAfterError = () => {
-    resetSessionForRetry();
-    resetRecorderComponent();
-    setAnalysisError(null);
   };
 
   const handleRecordingComplete = async (audioBlob: Blob, transcript?: string) => {
     if (!sessionData) return;
     
     setSessionData({ ...sessionData, audioBlob });
-    setAnalysisError(null);
     
     console.log('Recording complete. Transcript received:', transcript);
     console.log('Transcript length:', transcript?.length || 0);
@@ -116,67 +102,24 @@ const Index = () => {
       } catch (error) {
         console.error('AI analysis failed:', error);
         const message = error instanceof Error ? error.message : "AI analysis failed. Please restart your speech.";
-        const normalizedMessage = message.toLowerCase();
-        
-        let errorState: AnalysisErrorState = {
-          title: "AI Analysis Failed",
-          description: "Something went wrong while scoring your speech. Please restart your speech and try again.",
-        };
-        
-        if (
-          normalizedMessage.includes('gemini is not available') ||
-          normalizedMessage.includes('temporarily unavailable') ||
-          normalizedMessage.includes('model is overloaded') ||
-          normalizedMessage.includes('unavailable')
-        ) {
-          errorState = {
-            title: "Gemini is not available right now",
-            description: "Gemini servers are overloaded. Please restart your speech and try again in a few minutes.",
-          };
-        } else if (
-          normalizedMessage.includes('limit exhausted') ||
-          normalizedMessage.includes('rate limit') ||
-          normalizedMessage.includes('429')
-        ) {
-          errorState = {
-            title: "Gemini limit exhausted",
-            description: "Gemini usage limit has been reached. Please wait a moment before restarting your speech.",
-          };
-        }
-        
+        console.warn('Gemini issue suppressed from UI:', message);
         resetSessionForRetry();
         resetRecorderComponent();
         setScoreData(null);
         setCurrentState("recording");
-        setAnalysisError(errorState);
       } finally {
         setIsAnalyzing(false);
       }
     } else {
-      console.warn('No valid transcript for AI analysis. Transcript:', transcript);
-      
-      const transcriptUnavailable = !transcript || transcript === "Transcription unavailable" || transcript.trim().length < 20;
-      
-      const errorState: AnalysisErrorState = transcriptUnavailable
-        ? {
-            title: "Recording Failed",
-            description: "We could not capture your speech. Please check your microphone and restart your speech.",
-          }
-        : {
-            title: "Transcript too short",
-            description: "Speech recognition only captured a few words. Please restart your speech and try again.",
-          };
-
-      setScoreData(null);
-      setCurrentState("recording");
-      resetSessionForRetry();
-      resetRecorderComponent();
-      setAnalysisError(errorState);
-    }
+    console.warn('No valid transcript for AI analysis. Transcript:', transcript);
+    setScoreData(null);
+    setCurrentState("recording");
+    resetSessionForRetry();
+    resetRecorderComponent();
+  }
   };
 
   const handleApiKeySet = (apiKey: string) => {
-    localStorage.setItem('gemini_api_key', apiKey);
     aiService.setApiKey(apiKey);
     
     // Continue with AI analysis if we have a pending recording
@@ -186,7 +129,6 @@ const Index = () => {
   };
 
   const handleTryAgain = () => {
-    setAnalysisError(null);
     setScoreData(null);
     resetSessionForRetry();
     setCurrentState("recording");
@@ -200,41 +142,18 @@ const Index = () => {
     setCurrentState("home");
     setSessionData(null);
     setScoreData(null);
-    setAnalysisError(null);
   };
 
   const handleBackToHome = () => {
     setCurrentState("home");
     setSessionData(null);
     setScoreData(null);
-    setAnalysisError(null);
   };
 
   if (currentState === "recording" && sessionData) {
     return (
       <div className="min-h-screen bg-speech-bg p-4 flex flex-col items-center">
         <div className="w-full max-w-5xl flex-1 flex flex-col items-center">
-          {analysisError && (
-            <div className="w-full max-w-3xl mb-6 rounded-2xl border border-destructive/40 bg-destructive/10 p-5 shadow-lg">
-              <p className="text-base font-semibold text-destructive-foreground">{analysisError.title}</p>
-              <p className="text-sm text-destructive-foreground/80 mt-1">{analysisError.description}</p>
-              <div className="flex flex-wrap gap-3 mt-4">
-                <Button
-                  onClick={handleRestartAfterError}
-                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                >
-                  Restart Speech
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => setAnalysisError(null)}
-                  className="border-destructive/40 text-destructive-foreground hover:bg-destructive/10"
-                >
-                  Dismiss
-                </Button>
-              </div>
-            </div>
-          )}
           <div className="flex-1 flex items-center justify-center w-full">
             <VoiceRecorder
               key={recorderResetCounter}
