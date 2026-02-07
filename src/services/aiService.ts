@@ -22,10 +22,14 @@ interface EnhancedFeedback {
     persuasiveness: string;
   };
   dataEnhancements: {
-    statisticalSupport: string[];
-    expertCitations: string[];
-    caseStudies: string[];
-    quantifiableClaims: string[];
+    logicalFrameworks?: string[];
+    premiseStrengthening?: string[];
+    fallacyCorrections?: string[];
+    reasoningImprovements?: string[];
+    statisticalSupport?: string[];
+    expertCitations?: string[];
+    caseStudies?: string[];
+    quantifiableClaims?: string[];
   };
   counterArguments: CounterArgument[];
   defenseStrategies: DefenseStrategy[];
@@ -303,7 +307,29 @@ ${prompt}`
 
         this.markEnvKeyAsUsed(candidate);
         console.log('✅ API call successful, parsing response...');
-        return this.parseAnalysis(analysis, request.transcript);
+        console.log('📥 RAW AI RESPONSE (full):', analysis);
+        console.log('📥 RAW AI RESPONSE length:', analysis.length);
+        console.log('📥 RAW AI RESPONSE first 1000 chars:', analysis.substring(0, 1000));
+        console.log('📥 RAW AI RESPONSE last 1000 chars:', analysis.substring(Math.max(0, analysis.length - 1000)));
+        
+        // Check if enhanced_argument appears in the raw response
+        const enhancedArgInResponse = analysis.toLowerCase().includes('enhanced') || analysis.toLowerCase().includes('enhanced_argument');
+        console.log('🔍 Enhanced argument keyword found in response:', enhancedArgInResponse);
+        if (enhancedArgInResponse) {
+          const enhancedIndex = analysis.toLowerCase().indexOf('enhanced');
+          console.log('🔍 Enhanced argument section preview:', analysis.substring(Math.max(0, enhancedIndex - 50), Math.min(analysis.length, enhancedIndex + 1000)));
+        }
+        
+        const parsedResult = this.parseAnalysis(analysis, request.transcript);
+        
+        console.log('✅ PARSED RESULT:', JSON.stringify(parsedResult, null, 2));
+        console.log('✅ ENHANCED ARGUMENT:', parsedResult.enhancedArgument);
+        console.log('✅ ENHANCED ARGUMENT length:', parsedResult.enhancedArgument?.length || 0);
+        console.log('✅ MISSING POINTS:', parsedResult.missingPoints);
+        console.log('✅ COUNTER ARGUMENTS count:', parsedResult.enhancedFeedback?.counterArguments?.length || 0);
+        console.log('✅ DEFENSE STRATEGIES count:', parsedResult.enhancedFeedback?.defenseStrategies?.length || 0);
+        
+        return parsedResult;
       }
 
       console.warn('All Gemini API keys failed; returning friendly fallback message.', lastError);
@@ -753,20 +779,33 @@ Always provide complete analysis with scores and detailed feedback. Use whicheve
   }
 
   private parseAnalysis(analysis: string, originalTranscript: string): ScoreResult {
+    console.log('🔍 PARSE ANALYSIS - Starting parse...');
     console.log('📥 Raw AI response received, length:', analysis.length);
     console.log('📥 First 500 chars:', analysis.substring(0, 500));
     console.log('📥 Last 500 chars:', analysis.substring(Math.max(0, analysis.length - 500)));
     
     // Try JSON parsing first, then fallback to text parsing
     try {
-      return this.parseAsJson(analysis, originalTranscript);
+      console.log('🔍 Attempting JSON parsing...');
+      const jsonResult = this.parseAsJson(analysis, originalTranscript);
+      console.log('✅ JSON parsing successful!');
+      console.log('📊 JSON Result - Enhanced Argument:', jsonResult.enhancedArgument?.substring(0, 200) || 'N/A');
+      return jsonResult;
     } catch (jsonError) {
       console.warn('⚠️ JSON parsing failed, attempting text parsing:', jsonError instanceof Error ? jsonError.message : String(jsonError));
+      console.warn('⚠️ JSON Error details:', jsonError);
       try {
-        return this.parseAsText(analysis, originalTranscript);
+        console.log('🔍 Attempting text parsing...');
+        const textResult = this.parseAsText(analysis, originalTranscript);
+        console.log('✅ Text parsing successful!');
+        console.log('📊 Text Result - Enhanced Argument:', textResult.enhancedArgument?.substring(0, 200) || 'N/A');
+        return textResult;
       } catch (textError) {
         console.error('❌ Both JSON and text parsing failed, using fallback');
-        return this.createFallbackResult(analysis, originalTranscript);
+        console.error('❌ Text Error details:', textError);
+        const fallbackResult = this.createFallbackResult(analysis, originalTranscript);
+        console.log('📊 Fallback Result - Enhanced Argument:', fallbackResult.enhancedArgument?.substring(0, 200) || 'N/A');
+        return fallbackResult;
       }
     }
   }
@@ -839,24 +878,42 @@ Always provide complete analysis with scores and detailed feedback. Use whicheve
       try {
         parsed = JSON.parse(jsonString);
         console.log('✅ Successfully parsed JSON on first attempt');
+        console.log('📊 Parsed JSON keys:', Object.keys(parsed));
+        console.log('📊 Parsed enhanced_argument exists:', !!parsed.enhanced_argument);
+        console.log('📊 Parsed enhanced_argument length:', parsed.enhanced_argument?.length || 0);
+        if (parsed.enhanced_argument) {
+          console.log('📊 Parsed enhanced_argument preview:', parsed.enhanced_argument.substring(0, 300));
+        }
       } catch (parseError) {
         console.warn('⚠️ Initial JSON parse failed, attempting to fix...');
+        console.warn('⚠️ Parse error:', parseError instanceof Error ? parseError.message : String(parseError));
+        console.warn('⚠️ JSON string length:', jsonString.length);
+        console.warn('⚠️ JSON string preview:', jsonString.substring(0, 500));
         try {
           let fixedJson = this.repairJsonString(jsonString);
           parsed = JSON.parse(fixedJson);
           console.log('✅ Successfully parsed JSON after fixing');
+          console.log('📊 Fixed JSON - enhanced_argument exists:', !!parsed.enhanced_argument);
         } catch (fixError) {
+          console.warn('⚠️ Fixed JSON parse also failed, trying minimal extraction...');
+          console.warn('⚠️ Fix error:', fixError instanceof Error ? fixError.message : String(fixError));
           try {
             const minimalJson = this.extractMinimalValidJson(jsonString);
             parsed = JSON.parse(minimalJson);
             console.log('✅ Successfully parsed minimal JSON');
+            console.log('📊 Minimal JSON - enhanced_argument exists:', !!parsed.enhanced_argument);
           } catch (minimalError) {
+            console.error('❌ All JSON parsing attempts failed');
+            console.error('❌ Minimal error:', minimalError instanceof Error ? minimalError.message : String(minimalError));
             throw new Error(`Failed to parse AI response as JSON. Error: ${parseError instanceof Error ? parseError.message : 'Unknown error'}`);
           }
         }
       }
 
-      return this.buildScoreResultFromParsed(parsed, originalTranscript);
+      const result = this.buildScoreResultFromParsed(parsed, originalTranscript);
+      console.log('📊 Final Result - Enhanced Argument:', result.enhancedArgument?.substring(0, 200) || 'EMPTY');
+      console.log('📊 Final Result - Enhanced Argument full length:', result.enhancedArgument?.length || 0);
+      return result;
     } catch (error) {
       throw error;
     }
@@ -872,7 +929,8 @@ Always provide complete analysis with scores and detailed feedback. Use whicheve
       const patterns = [
         new RegExp(`${label}\\s*[:=]\\s*(\\d+)`, 'i'),
         new RegExp(`${label}\\s+(\\d+)`, 'i'),
-        new RegExp(`"${label.toLowerCase().replace(/\s+/g, '_')}"\\s*[:=]\\s*(\\d+)`, 'i')
+        new RegExp(`"${label.toLowerCase().replace(/\s+/g, '_')}"\\s*[:=]\\s*(\\d+)`, 'i'),
+        new RegExp(`${label.toUpperCase()}\\s*[:=]\\s*(\\d+)`, 'i')
       ];
       
       for (const pattern of patterns) {
@@ -880,18 +938,21 @@ Always provide complete analysis with scores and detailed feedback. Use whicheve
         if (match && match[1]) {
           const score = parseInt(match[1], 10);
           if (!isNaN(score) && score >= 0 && score <= 10) {
+            console.log(`✅ Extracted ${label} score:`, score);
             return score;
           }
         }
       }
+      console.warn(`⚠️ Could not extract ${label} score, using default:`, defaultValue);
       return defaultValue;
     };
 
     // Extract feedback arrays
     const extractFeedback = (label: string): string[] => {
       const patterns = [
-        new RegExp(`${label}\\s*[:\\n]\\s*([\\s\\S]*?)(?=\\n\\n|\\n[A-Z]|$)`, 'i'),
-        new RegExp(`"${label.toLowerCase().replace(/\s+/g, '_')}"\\s*[:\\[\\]]\\s*\\[([\\s\\S]*?)\\]`, 'i')
+        new RegExp(`${label}\\s*[:\\n]\\s*([\\s\\S]*?)(?=\\n\\n|\\n[A-Z]{2,}|\\n\\s*(?:logic|rhetoric|empathy|delivery|missing|enhanced|counter|defense|strategic)|$)`, 'i'),
+        new RegExp(`"${label.toLowerCase().replace(/\s+/g, '_')}"\\s*[:\\[\\]]\\s*\\[([\\s\\S]*?)\\]`, 'i'),
+        new RegExp(`${label.toUpperCase()}\\s*[:\\n]\\s*([\\s\\S]*?)(?=\\n\\n|\\n[A-Z]{2,}|$)`, 'i')
       ];
       
       for (const pattern of patterns) {
@@ -899,10 +960,11 @@ Always provide complete analysis with scores and detailed feedback. Use whicheve
         if (match && match[1]) {
           const items = match[1]
             .split(/[-•*]\s*|\d+\.\s*|,\s*"/)
-            .map(item => item.trim())
+            .map(item => item.trim().replace(/^["']|["']$/g, ''))
             .filter(item => item.length > 0 && !item.match(/^[\[\]"]+$/));
           
           if (items.length > 0) {
+            console.log(`✅ Extracted ${label} feedback:`, items.length, 'items');
             return items;
           }
         }
@@ -913,10 +975,15 @@ Always provide complete analysis with scores and detailed feedback. Use whicheve
         const afterLabel = text.substring(labelIndex + label.length);
         const nextSection = afterLabel.match(/^[:\n]\s*([^\n]+(?:\n[^\n]+)*)/);
         if (nextSection && nextSection[1]) {
-          return [nextSection[1].trim()];
+          const item = nextSection[1].trim();
+          if (item.length > 0) {
+            console.log(`✅ Extracted ${label} feedback (single item):`, item.substring(0, 100));
+            return [item];
+          }
         }
       }
       
+      console.warn(`⚠️ Could not extract ${label} feedback`);
       return [];
     };
 
@@ -936,136 +1003,491 @@ Always provide complete analysis with scores and detailed feedback. Use whicheve
       ? missingPointsMatch[1].split(/[-•*]\s*|\d+\.\s*|,\s*"/).map(p => p.trim().replace(/^["']|["']$/g, '')).filter(p => p.length > 0 && !p.match(/^[\[\]{}]+$/))
       : [];
 
-    // Extract enhanced argument
-    const enhancedArgMatch = text.match(/(?:enhanced argument|enhanced_argument)[:\n]\s*([\s\S]*?)(?=\n\n|\n[A-Z]{2,}|enhanced feedback|counter|defense|$)/i);
-    const enhancedArgument = enhancedArgMatch ? enhancedArgMatch[1].trim() : '';
+    // Extract enhanced argument - improved regex to capture multiline content
+    // Try multiple patterns to catch different formats
+    let enhancedArgument = '';
+    
+    console.log('🔍 TEXT PARSING - Looking for enhanced argument in text...');
+    console.log('🔍 TEXT PARSING - Text length:', text.length);
+    
+    // Pattern 1: "enhanced argument:" or "enhanced_argument:" followed by content
+    const pattern1 = /(?:enhanced\s+argument|enhanced_argument)\s*[:=]\s*([\s\S]*?)(?=\n\s*(?:enhanced\s+feedback|counter|defense|strategic|argument\s+analysis|data\s+enhancements|missing\s+points|\[|\{)|$)/i;
+    let match1 = text.match(pattern1);
+    if (match1 && match1[1]) {
+      enhancedArgument = match1[1].trim();
+      console.log('✅ Pattern 1 matched, length:', enhancedArgument.length);
+    }
+    
+    // Pattern 2: Look for "ENHANCED ARGUMENT:" in uppercase
+    if (!enhancedArgument || enhancedArgument.length < 50) {
+      const pattern2 = /ENHANCED\s+ARGUMENT\s*[:=]\s*([\s\S]*?)(?=\n\s*(?:ENHANCED|COUNTER|DEFENSE|STRATEGIC|ANALYSIS|MISSING)|$)/i;
+      const match2 = text.match(pattern2);
+      if (match2 && match2[1] && match2[1].trim().length > enhancedArgument.length) {
+        enhancedArgument = match2[1].trim();
+        console.log('✅ Pattern 2 matched, length:', enhancedArgument.length);
+      }
+    }
+    
+    // Pattern 3: Look for content between "enhanced argument" and next major section
+    if (!enhancedArgument || enhancedArgument.length < 50) {
+      const enhancedIndex = text.toLowerCase().indexOf('enhanced argument');
+      if (enhancedIndex !== -1) {
+        console.log('🔍 Found "enhanced argument" at index:', enhancedIndex);
+        const afterLabel = text.substring(enhancedIndex + 'enhanced argument'.length);
+        // Find the colon or newline after the label
+        const colonIndex = afterLabel.indexOf(':');
+        const newlineIndex = afterLabel.indexOf('\n');
+        const startIndex = colonIndex !== -1 && (newlineIndex === -1 || colonIndex < newlineIndex) 
+          ? colonIndex + 1 
+          : newlineIndex !== -1 ? newlineIndex + 1 : 0;
+        
+        const contentStart = afterLabel.substring(startIndex).trim();
+        console.log('🔍 Content start preview:', contentStart.substring(0, 200));
+        
+        // Find where the next major section starts
+        const nextSectionPattern = /\n\s*(?:enhanced\s+feedback|counter|defense|strategic|argument\s+analysis|data\s+enhancements|missing\s+points|\[|\{)/i;
+        const nextSectionMatch = contentStart.match(nextSectionPattern);
+        if (nextSectionMatch) {
+          enhancedArgument = contentStart.substring(0, nextSectionMatch.index).trim();
+          console.log('✅ Pattern 3 matched (with next section), length:', enhancedArgument.length);
+        } else {
+          // Take everything until end or next uppercase section header
+          const nextUppercase = contentStart.match(/\n[A-Z]{2,}/);
+          if (nextUppercase) {
+            enhancedArgument = contentStart.substring(0, nextUppercase.index).trim();
+            console.log('✅ Pattern 3 matched (with uppercase header), length:', enhancedArgument.length);
+          } else {
+            // Take a reasonable chunk (up to 5000 chars) if no clear boundary
+            enhancedArgument = contentStart.substring(0, 5000).trim();
+            console.log('✅ Pattern 3 matched (fallback chunk), length:', enhancedArgument.length);
+          }
+        }
+      }
+    }
+    
+    // Pattern 4: Look for JSON-like structure with "enhanced_argument"
+    if (!enhancedArgument || enhancedArgument.length < 50) {
+      const jsonPattern = /"enhanced_argument"\s*:\s*"((?:[^"\\]|\\.|\\n)+)"/;
+      const jsonMatch = text.match(jsonPattern);
+      if (jsonMatch && jsonMatch[1]) {
+        const decoded = jsonMatch[1]
+          .replace(/\\"/g, '"')
+          .replace(/\\n/g, '\n')
+          .replace(/\\r/g, '\r')
+          .replace(/\\t/g, '\t')
+          .replace(/\\\\/g, '\\');
+        if (decoded.length > enhancedArgument.length) {
+          enhancedArgument = decoded.trim();
+          console.log('✅ Pattern 4 matched (JSON), length:', enhancedArgument.length);
+        }
+      }
+    }
+    
+    // Pattern 5: Look for multiline text after "Enhanced Argument" header
+    if (!enhancedArgument || enhancedArgument.length < 50) {
+      const headerPattern = /(?:^|\n)\s*(?:Enhanced\s+Argument|ENHANCED\s+ARGUMENT)\s*[:]\s*\n([\s\S]*?)(?=\n\s*(?:Enhanced|Counter|Defense|Strategic|Analysis|Missing|\[|\{)|$)/im;
+      const headerMatch = text.match(headerPattern);
+      if (headerMatch && headerMatch[1]) {
+        const candidate = headerMatch[1].trim();
+        if (candidate.length > enhancedArgument.length) {
+          enhancedArgument = candidate;
+          console.log('✅ Pattern 5 matched (header), length:', enhancedArgument.length);
+        }
+      }
+    }
+    
+    // Clean up common prefixes/suffixes and markdown
+    enhancedArgument = enhancedArgument
+      .replace(/^["']|["']$/g, '')
+      .replace(/^```[\w]*\n?|\n?```$/g, '')
+      .replace(/^\*\*|\*\*$/g, '')
+      .replace(/^#+\s*/, '')
+      .trim();
+    
+    console.log('🔍 TEXT PARSING - Enhanced argument extracted:', enhancedArgument?.substring(0, 200) || 'EMPTY');
+    console.log('🔍 TEXT PARSING - Enhanced argument length:', enhancedArgument?.length || 0);
+    
+    // If still empty or too short, log the full text around "enhanced" for debugging
+    if (!enhancedArgument || enhancedArgument.length < 50) {
+      const enhancedKeywordIndex = text.toLowerCase().indexOf('enhanced');
+      if (enhancedKeywordIndex !== -1) {
+        const contextStart = Math.max(0, enhancedKeywordIndex - 100);
+        const contextEnd = Math.min(text.length, enhancedKeywordIndex + 2000);
+        console.warn('⚠️ Enhanced argument not found. Context around "enhanced":', text.substring(contextStart, contextEnd));
+      } else {
+        console.warn('⚠️ "Enhanced" keyword not found in text at all');
+        console.warn('⚠️ Text preview (first 2000 chars):', text.substring(0, 2000));
+      }
+    }
 
-    // Extract counter arguments
+    // Extract counter arguments - improved extraction
     const extractCounterArguments = (): any[] => {
+      console.log('🔍 Extracting counter arguments...');
       const counters: any[] = [];
-      const counterRegex = /(?:counter.?arguments?|counter.?args?)[:\n]\s*/i;
-      const counterMatch = text.match(counterRegex);
       
-      if (counterMatch) {
-        const counterSection = text.substring(counterMatch.index! + counterMatch[0].length);
+      // Try to find counter arguments section
+      const counterSectionPatterns = [
+        /(?:counter.?arguments?|counter.?args?|anticipated\s+counterattacks?)[:\n]\s*/i,
+        /COUNTER.?ARGUMENTS?[:\n]\s*/i,
+        /"counter_arguments"\s*:\s*\[/i
+      ];
+      
+      let counterSection = '';
+      let counterSectionStart = -1;
+      
+      for (const pattern of counterSectionPatterns) {
+        const match = text.match(pattern);
+        if (match && match.index !== undefined) {
+          counterSectionStart = match.index + match[0].length;
+          counterSection = text.substring(counterSectionStart);
+          console.log('✅ Found counter arguments section at index:', counterSectionStart);
+          break;
+        }
+      }
+      
+      if (!counterSection) {
+        console.warn('⚠️ Counter arguments section not found');
+        // Try to find individual counterarguments scattered in text
+        const scatteredPattern = /counterargument\s*#?\s*(\d+)[:\n\s]*([\s\S]{100,2000}?)(?=counterargument|defense|strategic|$)/gi;
+        let match;
+        while ((match = scatteredPattern.exec(text)) !== null && counters.length < 3) {
+          const content = match[2] || '';
+          const rebuttalMatch = content.match(/(?:rebuttal|the\s+attack|opponent\s+will\s+argue)[:\n\s]*([^\n]+(?:\n[^\n]+){0,5})/i);
+          const strengthMatch = content.match(/(?:strength|threat|level)[:\n\s]*(high|medium|low)/i);
+          
+          counters.push({
+            rebuttal: rebuttalMatch ? rebuttalMatch[1].trim() : content.substring(0, 300).trim(),
+            strength_level: strengthMatch ? strengthMatch[1].charAt(0).toUpperCase() + strengthMatch[1].slice(1).toLowerCase() : 'Medium',
+            supporting_evidence: content.match(/(?:supporting|evidence|logic)[:\n\s]*([^\n]+(?:\n[^\n]+){0,3})/i)?.[1]?.trim() || '',
+            common_sources: content.match(/(?:sources?|common)[:\n\s]*([^\n]+(?:\n[^\n]+){0,2})/i)?.[1]?.trim() || '',
+            key_points: content.match(/(?:key\s+points?|talking\s+points?)[:\n\s]*([^\n]+(?:\n[^\n]+){0,4})/i)?.[1]?.split(/[-•*]\s*|\d+\.\s*/).map(p => p.trim()).filter(p => p.length > 0) || []
+          });
+        }
+      } else {
+        // Extract from counter section
         const counterPatterns = [
-          /counterargument\s*#?\s*(\d+)[:\n]\s*([\s\S]*?)(?=counterargument|defense|$)/gi,
-          /rebuttal\s*#?\s*(\d+)[:\n]\s*([\s\S]*?)(?=rebuttal|defense|$)/gi
+          /counterargument\s*#?\s*(\d+)[:\n\s]*([\s\S]{200,3000}?)(?=counterargument\s*#?\s*\d+|defense|strategic|$)/gi,
+          /rebuttal\s*#?\s*(\d+)[:\n\s]*([\s\S]{200,3000}?)(?=rebuttal\s*#?\s*\d+|defense|strategic|$)/gi,
+          /\{\s*"rebuttal"\s*:\s*"([^"]+)"[\s\S]{100,2000}?\}/g
         ];
         
         for (const pattern of counterPatterns) {
           let match;
           while ((match = pattern.exec(counterSection)) !== null && counters.length < 3) {
-            const content = match[2] || match[0];
-            const rebuttalMatch = content.match(/(?:rebuttal|the attack)[:\n]\s*([^\n]+(?:\n[^\n]+)*)/i);
-            const strengthMatch = content.match(/(?:strength|threat)[:\n]\s*(high|medium|low)/i);
+            const content = match[2] || match[0] || '';
             
-            counters.push({
-              rebuttal: rebuttalMatch ? rebuttalMatch[1].trim() : content.substring(0, 200).trim(),
-              strength_level: strengthMatch ? strengthMatch[1].charAt(0).toUpperCase() + strengthMatch[1].slice(1).toLowerCase() : 'Medium',
-              supporting_logic: '',
-              logical_frameworks: '',
-              key_points: []
-            });
+            // Extract rebuttal
+            const rebuttalPatterns = [
+              /(?:rebuttal|the\s+attack|opponent\s+will\s+argue|strongest\s+opponent)[:\n\s]*([^\n]+(?:\n[^\n]+){0,5})/i,
+              /"rebuttal"\s*:\s*"([^"]+)"/i
+            ];
+            let rebuttal = '';
+            for (const rp of rebuttalPatterns) {
+              const rm = content.match(rp);
+              if (rm && rm[1]) {
+                rebuttal = rm[1].trim().replace(/\\"/g, '"').replace(/\\n/g, '\n');
+                break;
+              }
+            }
+            if (!rebuttal) {
+              rebuttal = content.substring(0, 400).trim();
+            }
+            
+            // Extract strength level
+            const strengthMatch = content.match(/(?:strength|threat|level)[:\n\s]*(high|medium|low)/i);
+            const strengthLevel = strengthMatch ? strengthMatch[1].charAt(0).toUpperCase() + strengthMatch[1].slice(1).toLowerCase() : 'Medium';
+            
+            // Extract supporting evidence
+            const evidencePatterns = [
+              /(?:supporting\s+evidence|supporting_logic|their\s+evidence|logic)[:\n\s]*([^\n]+(?:\n[^\n]+){0,5})/i,
+              /"supporting_evidence"\s*:\s*"([^"]+)"/i
+            ];
+            let supportingEvidence = '';
+            for (const ep of evidencePatterns) {
+              const em = content.match(ep);
+              if (em && em[1]) {
+                supportingEvidence = em[1].trim().replace(/\\"/g, '"').replace(/\\n/g, '\n');
+                break;
+              }
+            }
+            
+            // Extract common sources
+            const sourcesMatch = content.match(/(?:common\s+sources?|sources?)[:\n\s]*([^\n]+(?:\n[^\n]+){0,3})/i);
+            const commonSources = sourcesMatch ? sourcesMatch[1].trim() : '';
+            
+            // Extract key points
+            const keyPointsMatch = content.match(/(?:key\s+points?|talking\s+points?)[:\n\s]*([\s\S]{50,1000}?)(?=\n\s*(?:key|talking|defense|strategic)|$)/i);
+            let keyPoints: string[] = [];
+            if (keyPointsMatch) {
+              keyPoints = keyPointsMatch[1]
+                .split(/[-•*]\s*|\d+\.\s*|\n\s*(?=\w)/)
+                .map(p => p.trim())
+                .filter(p => p.length > 10 && !p.match(/^(key|talking|points?)/i));
+            }
+            
+            if (rebuttal && rebuttal.length > 20) {
+              counters.push({
+                rebuttal: rebuttal,
+                strength_level: strengthLevel,
+                supporting_evidence: supportingEvidence,
+                common_sources: commonSources,
+                key_points: keyPoints.length > 0 ? keyPoints : []
+              });
+              console.log(`✅ Extracted counterargument ${counters.length}, rebuttal length:`, rebuttal.length);
+            }
           }
+          if (counters.length >= 3) break;
         }
       }
       
-      if (counters.length === 0) {
+      // If we still don't have enough, try JSON format
+      if (counters.length < 3) {
         const jsonCounterMatch = text.match(/"counter_arguments"\s*:\s*\[([\s\S]*?)\]/i);
         if (jsonCounterMatch) {
-          const counterObjects = jsonCounterMatch[1].match(/\{[\s\S]*?\}/g);
+          const counterObjects = jsonCounterMatch[1].match(/\{[\s\S]{100,2000}?\}/g);
           if (counterObjects) {
-            counterObjects.slice(0, 3).forEach(objStr => {
-              const rebuttalMatch = objStr.match(/"rebuttal"\\s*:\\s*"([^"]+)"/i);
-              const strengthMatch = objStr.match(/"strength_level"\\s*:\\s*"([^"]+)"/i);
-              counters.push({
-                rebuttal: rebuttalMatch ? rebuttalMatch[1] : 'Counterargument provided',
-                strength_level: strengthMatch ? strengthMatch[1] : 'Medium',
-                supporting_logic: '',
-                logical_frameworks: '',
-                key_points: []
-              });
+            counterObjects.slice(0, 3).forEach((objStr, idx) => {
+              if (counters.length < 3) {
+                const rebuttalMatch = objStr.match(/"rebuttal"\s*:\s*"([^"]+)"/i);
+                const strengthMatch = objStr.match(/"strength_level"\s*:\s*"([^"]+)"/i);
+                const evidenceMatch = objStr.match(/"supporting_evidence"\s*:\s*"([^"]+)"/i);
+                const sourcesMatch = objStr.match(/"common_sources"\s*:\s*"([^"]+)"/i);
+                const keyPointsMatch = objStr.match(/"key_points"\s*:\s*\[([\s\S]*?)\]/i);
+                
+                let keyPoints: string[] = [];
+                if (keyPointsMatch) {
+                  keyPoints = keyPointsMatch[1]
+                    .match(/"([^"]+)"/g)
+                    ?.map(kp => kp.replace(/^"|"$/g, '').replace(/\\"/g, '"').replace(/\\n/g, '\n')) || [];
+                }
+                
+                counters.push({
+                  rebuttal: rebuttalMatch ? rebuttalMatch[1].replace(/\\"/g, '"').replace(/\\n/g, '\n') : `Counterargument ${idx + 1}`,
+                  strength_level: strengthMatch ? strengthMatch[1] : 'Medium',
+                  supporting_evidence: evidenceMatch ? evidenceMatch[1].replace(/\\"/g, '"').replace(/\\n/g, '\n') : '',
+                  common_sources: sourcesMatch ? sourcesMatch[1].replace(/\\"/g, '"').replace(/\\n/g, '\n') : '',
+                  key_points: keyPoints
+                });
+              }
             });
           }
         }
       }
       
-      while (counters.length < 3) {
+      // Fill up to 3 if needed (but only if we have at least some content)
+      while (counters.length < 3 && counters.length > 0) {
+        const lastCounter = counters[counters.length - 1];
+        if (lastCounter.rebuttal && lastCounter.rebuttal.length > 50) {
+          // Don't add empty placeholders if we have real content
+          break;
+        }
         counters.push({
           rebuttal: `Counterargument ${counters.length + 1}: Analysis of potential opposing views`,
           strength_level: 'Medium',
-          supporting_logic: '',
-          logical_frameworks: '',
+          supporting_evidence: '',
+          common_sources: '',
           key_points: []
         });
       }
       
+      console.log(`✅ Extracted ${counters.length} counter arguments`);
       return counters.slice(0, 3);
     };
 
-    // Extract defense strategies
+    // Extract defense strategies - improved extraction
     const extractDefenseStrategies = (): any[] => {
+      console.log('🔍 Extracting defense strategies...');
       const defenses: any[] = [];
-      const defenseRegex = /(?:defense.?strategies?|defense)[:\n]\s*/i;
-      const defenseMatch = text.match(defenseRegex);
       
-      if (defenseMatch) {
-        const defenseSection = text.substring(defenseMatch.index! + defenseMatch[0].length);
+      // Try to find defense strategies section
+      const defenseSectionPatterns = [
+        /(?:defense.?strategies?|defense\s+strategies?)[:\n]\s*/i,
+        /DEFENSE.?STRATEGIES?[:\n]\s*/i,
+        /"defense_strategies"\s*:\s*\[/i
+      ];
+      
+      let defenseSection = '';
+      let defenseSectionStart = -1;
+      
+      for (const pattern of defenseSectionPatterns) {
+        const match = text.match(pattern);
+        if (match && match.index !== undefined) {
+          defenseSectionStart = match.index + match[0].length;
+          defenseSection = text.substring(defenseSectionStart);
+          console.log('✅ Found defense strategies section at index:', defenseSectionStart);
+          break;
+        }
+      }
+      
+      if (!defenseSection) {
+        console.warn('⚠️ Defense strategies section not found');
+        // Try to find individual defense strategies scattered in text
+        const scatteredPattern = /defense\s+strategy\s*#?\s*(\d+)[:\n\s]*([\s\S]{200,3000}?)(?=defense\s+strategy|strategic|$)/gi;
+        let match;
+        while ((match = scatteredPattern.exec(text)) !== null && defenses.length < 3) {
+          const content = match[2] || '';
+          const preemptiveMatch = content.match(/(?:preemptive|before\s+they\s+attack|neutralize)[:\n\s]*([^\n]+(?:\n[^\n]+){0,5})/i);
+          const directMatch = content.match(/(?:direct\s+response|when\s+confronted|counter)[:\n\s]*([^\n]+(?:\n[^\n]+){0,5})/i);
+          const redirectMatch = content.match(/(?:redirect|pivot|reframe)[:\n\s]*([^\n]+(?:\n[^\n]+){0,5})/i);
+          const evidenceMatch = content.match(/(?:evidence\s+arsenal|logical\s+arsenal|weapons)[:\n\s]*([^\n]+(?:\n[^\n]+){0,5})/i);
+          
+          defenses.push({
+            preemptive_defense: preemptiveMatch ? preemptiveMatch[1].trim() : content.substring(0, 300).trim(),
+            direct_response: directMatch ? directMatch[1].trim() : '',
+            redirect_technique: redirectMatch ? redirectMatch[1].trim() : '',
+            evidence_arsenal: evidenceMatch ? evidenceMatch[1].trim() : '',
+            key_points: content.match(/(?:key\s+points?|talking\s+points?)[:\n\s]*([^\n]+(?:\n[^\n]+){0,4})/i)?.[1]?.split(/[-•*]\s*|\d+\.\s*/).map(p => p.trim()).filter(p => p.length > 0) || []
+          });
+        }
+      } else {
+        // Extract from defense section
         const defensePatterns = [
-          /defense\s*strategy\s*#?\s*(\d+)[:\n]\s*([\s\S]*?)(?=defense\s*strategy|strategic|$)/gi,
-          /strategy\s*#?\s*(\d+)[:\n]\s*([\s\S]*?)(?=strategy|strategic|$)/gi
+          /defense\s+strategy\s*#?\s*(\d+)[:\n\s]*([\s\S]{300,4000}?)(?=defense\s+strategy\s*#?\s*\d+|strategic|$)/gi,
+          /strategy\s*#?\s*(\d+)[:\n\s]*([\s\S]{300,4000}?)(?=strategy\s*#?\s*\d+|strategic|$)/gi,
+          /\{\s*"preemptive_defense"\s*:\s*"([^"]+)"[\s\S]{200,3000}?\}/g
         ];
         
         for (const pattern of defensePatterns) {
           let match;
           while ((match = pattern.exec(defenseSection)) !== null && defenses.length < 3) {
-            const content = match[2] || match[0];
-            const preemptiveMatch = content.match(/(?:preemptive|before)[:\n]\s*([^\n]+(?:\n[^\n]+)*)/i);
-            const directMatch = content.match(/(?:direct|when confronted)[:\n]\s*([^\n]+(?:\n[^\n]+)*)/i);
-            const redirectMatch = content.match(/(?:redirect|pivot)[:\n]\s*([^\n]+(?:\n[^\n]+)*)/i);
+            const content = match[2] || match[0] || '';
             
-            defenses.push({
-              preemptive_defense: preemptiveMatch ? preemptiveMatch[1].trim() : content.substring(0, 150).trim(),
-              direct_response: directMatch ? directMatch[1].trim() : '',
-              redirect_technique: redirectMatch ? redirectMatch[1].trim() : '',
-              logical_arsenal: '',
-              key_points: []
-            });
+            // Extract preemptive defense
+            const preemptivePatterns = [
+              /(?:preemptive\s+defense|before\s+they\s+attack|neutralize)[:\n\s]*([^\n]+(?:\n[^\n]+){0,8})/i,
+              /"preemptive_defense"\s*:\s*"([^"]+)"/i
+            ];
+            let preemptiveDefense = '';
+            for (const pp of preemptivePatterns) {
+              const pm = content.match(pp);
+              if (pm && pm[1]) {
+                preemptiveDefense = pm[1].trim().replace(/\\"/g, '"').replace(/\\n/g, '\n');
+                break;
+              }
+            }
+            if (!preemptiveDefense) {
+              preemptiveDefense = content.substring(0, 500).trim();
+            }
+            
+            // Extract direct response
+            const directPatterns = [
+              /(?:direct\s+response|when\s+confronted|counter)[:\n\s]*([^\n]+(?:\n[^\n]+){0,8})/i,
+              /"direct_response"\s*:\s*"([^"]+)"/i
+            ];
+            let directResponse = '';
+            for (const dp of directPatterns) {
+              const dm = content.match(dp);
+              if (dm && dm[1]) {
+                directResponse = dm[1].trim().replace(/\\"/g, '"').replace(/\\n/g, '\n');
+                break;
+              }
+            }
+            
+            // Extract redirect technique
+            const redirectPatterns = [
+              /(?:redirect\s+technique|pivot|reframe)[:\n\s]*([^\n]+(?:\n[^\n]+){0,8})/i,
+              /"redirect_technique"\s*:\s*"([^"]+)"/i
+            ];
+            let redirectTechnique = '';
+            for (const rp of redirectPatterns) {
+              const rm = content.match(rp);
+              if (rm && rm[1]) {
+                redirectTechnique = rm[1].trim().replace(/\\"/g, '"').replace(/\\n/g, '\n');
+                break;
+              }
+            }
+            
+            // Extract evidence arsenal
+            const evidencePatterns = [
+              /(?:evidence\s+arsenal|logical\s+arsenal|weapons|data\s+dump)[:\n\s]*([^\n]+(?:\n[^\n]+){0,8})/i,
+              /"evidence_arsenal"\s*:\s*"([^"]+)"/i,
+              /"logical_arsenal"\s*:\s*"([^"]+)"/i
+            ];
+            let evidenceArsenal = '';
+            for (const ep of evidencePatterns) {
+              const em = content.match(ep);
+              if (em && em[1]) {
+                evidenceArsenal = em[1].trim().replace(/\\"/g, '"').replace(/\\n/g, '\n');
+                break;
+              }
+            }
+            
+            // Extract key points
+            const keyPointsMatch = content.match(/(?:key\s+points?|talking\s+points?)[:\n\s]*([\s\S]{50,1500}?)(?=\n\s*(?:key|talking|defense|strategic)|$)/i);
+            let keyPoints: string[] = [];
+            if (keyPointsMatch) {
+              keyPoints = keyPointsMatch[1]
+                .split(/[-•*]\s*|\d+\.\s*|\n\s*(?=\w)/)
+                .map(p => p.trim())
+                .filter(p => p.length > 10 && !p.match(/^(key|talking|points?)/i));
+            }
+            
+            if (preemptiveDefense && preemptiveDefense.length > 30) {
+              defenses.push({
+                preemptive_defense: preemptiveDefense,
+                direct_response: directResponse,
+                redirect_technique: redirectTechnique,
+                evidence_arsenal: evidenceArsenal,
+                key_points: keyPoints.length > 0 ? keyPoints : []
+              });
+              console.log(`✅ Extracted defense strategy ${defenses.length}, preemptive length:`, preemptiveDefense.length);
+            }
           }
+          if (defenses.length >= 3) break;
         }
       }
       
-      if (defenses.length === 0) {
+      // If we still don't have enough, try JSON format
+      if (defenses.length < 3) {
         const jsonDefenseMatch = text.match(/"defense_strategies"\s*:\s*\[([\s\S]*?)\]/i);
         if (jsonDefenseMatch) {
-          const defenseObjects = jsonDefenseMatch[1].match(/\{[\s\S]*?\}/g);
+          const defenseObjects = jsonDefenseMatch[1].match(/\{[\s\S]{200,4000}?\}/g);
           if (defenseObjects) {
-            defenseObjects.slice(0, 3).forEach(objStr => {
-              const preemptiveMatch = objStr.match(/"preemptive_defense"\\s*:\\s*"([^"]+)"/i);
-              const directMatch = objStr.match(/"direct_response"\\s*:\\s*"([^"]+)"/i);
-              defenses.push({
-                preemptive_defense: preemptiveMatch ? preemptiveMatch[1] : 'Pre-emptive defense strategy',
-                direct_response: directMatch ? directMatch[1] : '',
-                redirect_technique: '',
-                logical_arsenal: '',
-                key_points: []
-              });
+            defenseObjects.slice(0, 3).forEach((objStr, idx) => {
+              if (defenses.length < 3) {
+                const preemptiveMatch = objStr.match(/"preemptive_defense"\s*:\s*"([^"]+)"/i);
+                const directMatch = objStr.match(/"direct_response"\s*:\s*"([^"]+)"/i);
+                const redirectMatch = objStr.match(/"redirect_technique"\s*:\s*"([^"]+)"/i);
+                const evidenceMatch = objStr.match(/"evidence_arsenal"\s*:\s*"([^"]+)"/i) || objStr.match(/"logical_arsenal"\s*:\s*"([^"]+)"/i);
+                const keyPointsMatch = objStr.match(/"key_points"\s*:\s*\[([\s\S]*?)\]/i);
+                
+                let keyPoints: string[] = [];
+                if (keyPointsMatch) {
+                  keyPoints = keyPointsMatch[1]
+                    .match(/"([^"]+)"/g)
+                    ?.map(kp => kp.replace(/^"|"$/g, '').replace(/\\"/g, '"').replace(/\\n/g, '\n')) || [];
+                }
+                
+                defenses.push({
+                  preemptive_defense: preemptiveMatch ? preemptiveMatch[1].replace(/\\"/g, '"').replace(/\\n/g, '\n') : `Defense Strategy ${idx + 1}`,
+                  direct_response: directMatch ? directMatch[1].replace(/\\"/g, '"').replace(/\\n/g, '\n') : '',
+                  redirect_technique: redirectMatch ? redirectMatch[1].replace(/\\"/g, '"').replace(/\\n/g, '\n') : '',
+                  evidence_arsenal: evidenceMatch ? evidenceMatch[1].replace(/\\"/g, '"').replace(/\\n/g, '\n') : '',
+                  key_points: keyPoints
+                });
+              }
             });
           }
         }
       }
       
-      while (defenses.length < 3) {
+      // Fill up to 3 if needed (but only if we have at least some content)
+      while (defenses.length < 3 && defenses.length > 0) {
+        const lastDefense = defenses[defenses.length - 1];
+        if (lastDefense.preemptive_defense && lastDefense.preemptive_defense.length > 50) {
+          // Don't add empty placeholders if we have real content
+          break;
+        }
         defenses.push({
           preemptive_defense: `Defense Strategy ${defenses.length + 1}: How to counter opposing arguments`,
           direct_response: '',
           redirect_technique: '',
-          logical_arsenal: '',
+          evidence_arsenal: '',
           key_points: []
         });
       }
       
+      console.log(`✅ Extracted ${defenses.length} defense strategies`);
       return defenses.slice(0, 3);
     };
 
@@ -1096,6 +1518,8 @@ Always provide complete analysis with scores and detailed feedback. Use whicheve
       : [];
 
     console.log('✅ Successfully parsed as structured text');
+    console.log('📊 Text parsing - Enhanced Argument extracted:', enhancedArgument?.substring(0, 200) || 'EMPTY');
+    console.log('📊 Text parsing - Enhanced Argument length:', enhancedArgument?.length || 0);
     
     const parsed = {
       logic_score: logicScore,
@@ -1107,7 +1531,7 @@ Always provide complete analysis with scores and detailed feedback. Use whicheve
       empathy_feedback: empathyFeedback.length > 0 ? empathyFeedback : ['No specific empathy feedback provided.'],
       delivery_feedback: deliveryFeedback.length > 0 ? deliveryFeedback : ['No specific delivery feedback provided.'],
       missing_points: missingPoints.length > 0 ? missingPoints : ['Review your logical structure', 'Add more specific examples', 'Strengthen your premises'],
-      enhanced_argument: enhancedArgument || 'Enhanced argument analysis would be provided here.',
+      enhanced_argument: enhancedArgument && enhancedArgument.trim().length > 0 ? enhancedArgument.trim() : 'Enhanced argument analysis would be provided here. The AI is analyzing your speech and will generate an improved version that strengthens your logical reasoning and argument structure.',
       enhanced_feedback: {
         argument_analysis: argumentAnalysis,
         data_enhancements: {
@@ -1122,7 +1546,10 @@ Always provide complete analysis with scores and detailed feedback. Use whicheve
       }
     };
 
-    return this.buildScoreResultFromParsed(parsed, originalTranscript);
+    const result = this.buildScoreResultFromParsed(parsed, originalTranscript);
+    console.log('📊 Text Parse Final Result - Enhanced Argument:', result.enhancedArgument?.substring(0, 200) || 'EMPTY');
+    console.log('📊 Text Parse Final Result - Enhanced Argument length:', result.enhancedArgument?.length || 0);
+    return result;
   }
 
   private createFallbackResult(analysis: string, originalTranscript: string): ScoreResult {
@@ -1226,6 +1653,9 @@ Always provide complete analysis with scores and detailed feedback. Use whicheve
   }
 
   private buildScoreResultFromParsed(parsed: any, originalTranscript: string): ScoreResult {
+    console.log('🔨 BUILD SCORE RESULT - Starting build from parsed data...');
+    console.log('📊 Parsed data keys:', Object.keys(parsed));
+    
     const logicScore = parsed.logic_score || 0;
     const rhetoricScore = parsed.rhetoric_score || 0;
     const empathyScore = parsed.empathy_score || 0;
@@ -1238,8 +1668,30 @@ Always provide complete analysis with scores and detailed feedback. Use whicheve
     const dataEnhancements = enhancedFeedback.data_enhancements || {};
     const counterArgs = enhancedFeedback.counter_arguments || [];
     const defenseStrats = enhancedFeedback.defense_strategies || [];
+    
+    console.log('📊 Enhanced argument from parsed:', parsed.enhanced_argument?.substring(0, 200) || 'NOT FOUND');
+    console.log('📊 Enhanced argument type:', typeof parsed.enhanced_argument);
+    console.log('📊 Enhanced argument length:', parsed.enhanced_argument?.length || 0);
+    console.log('📊 Missing points count:', parsed.missing_points?.length || 0);
+    console.log('📊 Counter arguments count:', counterArgs.length);
+    console.log('📊 Defense strategies count:', defenseStrats.length);
 
-    return {
+    const enhancedArgumentValue = (() => {
+      const rawEnhanced = parsed.enhanced_argument;
+      console.log('🔨 Building enhancedArgument from:', typeof rawEnhanced);
+      console.log('🔨 Raw enhanced_argument value:', rawEnhanced?.substring(0, 200) || 'EMPTY/NULL');
+      
+      if (rawEnhanced && typeof rawEnhanced === 'string' && rawEnhanced.trim().length > 0) {
+        const trimmed = rawEnhanced.trim();
+        console.log('✅ Using parsed enhanced_argument, length:', trimmed.length);
+        return trimmed;
+      } else {
+        console.warn('⚠️ Enhanced argument is empty or invalid, using fallback');
+        return 'Enhanced argument analysis would be provided here. The AI is analyzing your speech and will generate an improved version that strengthens your logical reasoning and argument structure for your chosen position.';
+      }
+    })();
+
+    const result: ScoreResult = {
       score: {
         logic: logicScore,
         rhetoric: rhetoricScore,
@@ -1255,7 +1707,20 @@ Always provide complete analysis with scores and detailed feedback. Use whicheve
         overall: `Your speech scored ${totalScore}/30. Focus on improving areas with lower scores for better performance.`
       },
       missingPoints: parsed.missing_points || [],
-      enhancedArgument: parsed.enhanced_argument || '',
+      enhancedArgument: (() => {
+        const rawEnhanced = parsed.enhanced_argument;
+        console.log('🔨 Building enhancedArgument from:', typeof rawEnhanced);
+        console.log('🔨 Raw enhanced_argument value:', rawEnhanced?.substring(0, 200) || 'EMPTY/NULL');
+        
+        if (rawEnhanced && typeof rawEnhanced === 'string' && rawEnhanced.trim().length > 0) {
+          const trimmed = rawEnhanced.trim();
+          console.log('✅ Using parsed enhanced_argument, length:', trimmed.length);
+          return trimmed;
+        } else {
+          console.warn('⚠️ Enhanced argument is empty or invalid, using fallback');
+          return 'Enhanced argument analysis would be provided here. The AI is analyzing your speech and will generate an improved version that strengthens your logical reasoning and argument structure for your chosen position.';
+        }
+      })(),
       enhancedFeedback: {
         argumentAnalysis: {
           logicalStructure: argumentAnalysis.logical_structure || argumentAnalysis.reasoning_quality || '',
@@ -1264,6 +1729,11 @@ Always provide complete analysis with scores and detailed feedback. Use whicheve
           persuasiveness: argumentAnalysis.persuasiveness || ''
         },
         dataEnhancements: {
+          logicalFrameworks: dataEnhancements.logical_frameworks || [],
+          premiseStrengthening: dataEnhancements.premise_strengthening || [],
+          fallacyCorrections: dataEnhancements.fallacy_corrections || [],
+          reasoningImprovements: dataEnhancements.reasoning_improvements || [],
+          // Legacy fields for backward compatibility
           statisticalSupport: dataEnhancements.statistical_support || [],
           expertCitations: dataEnhancements.expert_citations || [],
           caseStudies: dataEnhancements.case_studies || [],
@@ -1287,6 +1757,12 @@ Always provide complete analysis with scores and detailed feedback. Use whicheve
       },
       transcript: originalTranscript
     };
+    
+    console.log('✅ BUILD SCORE RESULT - Final result built');
+    console.log('📊 Final enhancedArgument:', result.enhancedArgument?.substring(0, 200) || 'EMPTY');
+    console.log('📊 Final enhancedArgument length:', result.enhancedArgument?.length || 0);
+    
+    return result;
   }
 
   private repairJsonString(json: string): string {
@@ -1480,10 +1956,46 @@ Always provide complete analysis with scores and detailed feedback. Use whicheve
     minimal.delivery_feedback = extractArray('delivery_feedback');
     minimal.missing_points = extractArray('missing_points');
 
-    // Try to extract enhanced_argument if present
-    const enhancedArgMatch = jsonString.match(/"enhanced_argument"\s*:\s*"([^"]*(?:\\.[^"]*)*)"/);
-    if (enhancedArgMatch) {
-      minimal.enhanced_argument = enhancedArgMatch[1].replace(/\\"/g, '"').replace(/\\n/g, '\n');
+    // Try to extract enhanced_argument if present - handle multiline strings
+    // First try standard JSON string format
+    let enhancedArgMatch = jsonString.match(/"enhanced_argument"\s*:\s*"((?:[^"\\]|\\.|\\n)*)"/s);
+    if (!enhancedArgMatch) {
+      // Try to find it as a multiline string (might span multiple lines)
+      const enhancedStart = jsonString.indexOf('"enhanced_argument"');
+      if (enhancedStart !== -1) {
+        const afterColon = jsonString.indexOf(':', enhancedStart);
+        const firstQuote = jsonString.indexOf('"', afterColon);
+        if (firstQuote !== -1) {
+          // Find the closing quote, handling escaped quotes
+          let quoteEnd = firstQuote + 1;
+          let escaped = false;
+          while (quoteEnd < jsonString.length) {
+            if (jsonString[quoteEnd] === '\\') {
+              escaped = !escaped;
+              quoteEnd++;
+              continue;
+            }
+            if (jsonString[quoteEnd] === '"' && !escaped) {
+              break;
+            }
+            escaped = false;
+            quoteEnd++;
+          }
+          if (quoteEnd < jsonString.length) {
+            const content = jsonString.substring(firstQuote + 1, quoteEnd);
+            enhancedArgMatch = [null, content];
+          }
+        }
+      }
+    }
+    if (enhancedArgMatch && enhancedArgMatch[1]) {
+      minimal.enhanced_argument = enhancedArgMatch[1]
+        .replace(/\\"/g, '"')
+        .replace(/\\n/g, '\n')
+        .replace(/\\r/g, '\r')
+        .replace(/\\t/g, '\t')
+        .replace(/\\\\/g, '\\')
+        .trim();
     }
 
     // Try to extract enhanced_feedback sections

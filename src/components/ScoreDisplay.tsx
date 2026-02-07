@@ -30,10 +30,14 @@ interface EnhancedFeedback {
     persuasiveness: string;
   };
   dataEnhancements: {
-    statisticalSupport: string[];
-    expertCitations: string[];
-    caseStudies: string[];
-    quantifiableClaims: string[];
+    statisticalSupport?: string[];
+    expertCitations?: string[];
+    caseStudies?: string[];
+    quantifiableClaims?: string[];
+    logicalFrameworks?: string[];
+    premiseStrengthening?: string[];
+    fallacyCorrections?: string[];
+    reasoningImprovements?: string[];
   };
   counterArguments: CounterArgument[];
   defenseStrategies: DefenseStrategy[];
@@ -135,7 +139,7 @@ export function ScoreDisplay({
           </CardTitle>
           {stance && (
             <Badge className="bg-primary text-primary-foreground border-0 mx-auto">
-              Argued {stance === "for" ? "FOR" : "AGAINST"}
+              Argued {stance === "for" ? "FOR" : stance === "against" ? "AGAINST" : "NEUTRAL"}
             </Badge>
           )}
         </CardHeader>
@@ -256,13 +260,19 @@ export function ScoreDisplay({
             
             <TabsContent value="enhanced" className="mt-4">
               <div className="prose prose-sm max-w-none">
-                <h4 className="text-foreground font-semibold mb-3">Enhanced Argument</h4>
+                <h4 className="text-foreground font-semibold mb-3">
+                  Enhanced Argument {stance && `(${stance === "for" ? "FOR" : stance === "against" ? "AGAINST" : "NEUTRAL"} Position)`}
+                </h4>
                 <p className="text-muted-foreground mb-4">
-                  Here's how your argument could be improved with better structure and the missing points:
+                  Here's how your {stance === "for" ? "FOR" : stance === "against" ? "AGAINST" : "NEUTRAL"} argument could be improved with better logical structure, reasoning frameworks, and addressing counterarguments:
                 </p>
                 <div className="bg-success/10 p-4 rounded-lg border-l-4 border-success">
-                  <div className="text-muted-foreground leading-relaxed whitespace-pre-line">
-                    {enhancedArgument || <span className="italic">Enhanced argument analysis would be provided here.</span>}
+                  <div className="text-foreground leading-relaxed whitespace-pre-line font-medium">
+                    {enhancedArgument && enhancedArgument.trim().length > 0 ? (
+                      enhancedArgument
+                    ) : (
+                      <span className="italic text-muted-foreground">Enhanced argument analysis would be provided here. The AI is analyzing your speech and will generate an improved version that strengthens your logical reasoning and argument structure.</span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -300,10 +310,63 @@ export function ScoreDisplay({
                     <div>
                       <h4 className="text-foreground font-semibold mb-3 flex items-center gap-2">
                         <TrendingUp className="w-5 h-5 text-primary" />
-                        📊 Data Enhancement Opportunities
+                        🧠 Logical Reasoning Enhancement Opportunities
                       </h4>
                       <div className="grid gap-4 md:grid-cols-2">
-                        {enhancedFeedback.dataEnhancements.statisticalSupport.length > 0 && (
+                        {enhancedFeedback.dataEnhancements.logicalFrameworks && enhancedFeedback.dataEnhancements.logicalFrameworks.length > 0 && (
+                          <div>
+                            <h5 className="font-medium text-foreground mb-2">Logical Frameworks</h5>
+                            <ul className="space-y-1">
+                              {enhancedFeedback.dataEnhancements.logicalFrameworks.map((framework, i) => (
+                                <li key={i} className="text-sm text-muted-foreground flex items-start gap-2">
+                                  <div className="w-1.5 h-1.5 bg-primary rounded-full mt-2 flex-shrink-0" />
+                                  {framework}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        {enhancedFeedback.dataEnhancements.premiseStrengthening && enhancedFeedback.dataEnhancements.premiseStrengthening.length > 0 && (
+                          <div>
+                            <h5 className="font-medium text-foreground mb-2">Premise Strengthening</h5>
+                            <ul className="space-y-1">
+                              {enhancedFeedback.dataEnhancements.premiseStrengthening.map((premise, i) => (
+                                <li key={i} className="text-sm text-muted-foreground flex items-start gap-2">
+                                  <div className="w-1.5 h-1.5 bg-primary rounded-full mt-2 flex-shrink-0" />
+                                  {premise}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        {enhancedFeedback.dataEnhancements.fallacyCorrections && enhancedFeedback.dataEnhancements.fallacyCorrections.length > 0 && (
+                          <div>
+                            <h5 className="font-medium text-foreground mb-2">Fallacy Corrections</h5>
+                            <ul className="space-y-1">
+                              {enhancedFeedback.dataEnhancements.fallacyCorrections.map((correction, i) => (
+                                <li key={i} className="text-sm text-muted-foreground flex items-start gap-2">
+                                  <div className="w-1.5 h-1.5 bg-primary rounded-full mt-2 flex-shrink-0" />
+                                  {correction}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        {enhancedFeedback.dataEnhancements.reasoningImprovements && enhancedFeedback.dataEnhancements.reasoningImprovements.length > 0 && (
+                          <div>
+                            <h5 className="font-medium text-foreground mb-2">Reasoning Improvements</h5>
+                            <ul className="space-y-1">
+                              {enhancedFeedback.dataEnhancements.reasoningImprovements.map((improvement, i) => (
+                                <li key={i} className="text-sm text-muted-foreground flex items-start gap-2">
+                                  <div className="w-1.5 h-1.5 bg-primary rounded-full mt-2 flex-shrink-0" />
+                                  {improvement}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        {/* Legacy fields for backward compatibility */}
+                        {enhancedFeedback.dataEnhancements.statisticalSupport && enhancedFeedback.dataEnhancements.statisticalSupport.length > 0 && (
                           <div>
                             <h5 className="font-medium text-foreground mb-2">Statistical Support</h5>
                             <ul className="space-y-1">
@@ -316,7 +379,7 @@ export function ScoreDisplay({
                             </ul>
                           </div>
                         )}
-                        {enhancedFeedback.dataEnhancements.expertCitations.length > 0 && (
+                        {enhancedFeedback.dataEnhancements.expertCitations && enhancedFeedback.dataEnhancements.expertCitations.length > 0 && (
                           <div>
                             <h5 className="font-medium text-foreground mb-2">Expert Citations</h5>
                             <ul className="space-y-1">
@@ -329,7 +392,7 @@ export function ScoreDisplay({
                             </ul>
                           </div>
                         )}
-                        {enhancedFeedback.dataEnhancements.caseStudies.length > 0 && (
+                        {enhancedFeedback.dataEnhancements.caseStudies && enhancedFeedback.dataEnhancements.caseStudies.length > 0 && (
                           <div>
                             <h5 className="font-medium text-foreground mb-2">Case Studies</h5>
                             <ul className="space-y-1">
@@ -342,7 +405,7 @@ export function ScoreDisplay({
                             </ul>
                           </div>
                         )}
-                        {enhancedFeedback.dataEnhancements.quantifiableClaims.length > 0 && (
+                        {enhancedFeedback.dataEnhancements.quantifiableClaims && enhancedFeedback.dataEnhancements.quantifiableClaims.length > 0 && (
                           <div>
                             <h5 className="font-medium text-foreground mb-2">Quantifiable Claims</h5>
                             <ul className="space-y-1">
