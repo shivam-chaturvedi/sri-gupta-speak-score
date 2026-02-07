@@ -40,11 +40,10 @@ export function MotionCard({ motion, onStartSpeech, isLoggedIn = false }: Motion
     setSelectedStance("");
   }, [motion.id]); // Reset when motion ID changes
 
-  // Memoize whether this is a stance motion to prevent re-renders from hiding buttons
+  // All motions now support For/Against/Neutral positions
   const isStanceMotion = useMemo(() => {
-    if (!motion || !motion.type) return false;
-    return motion.type === "stance";
-  }, [motion?.type, motion?.id]);
+    return true; // All topics support stance selection
+  }, [motion?.id]);
 
   const getCategoryColor = (category: string) => {
     const colors = {
@@ -65,7 +64,7 @@ export function MotionCard({ motion, onStartSpeech, isLoggedIn = false }: Motion
     onStartSpeech(
       motion, 
       selectedDuration, 
-      isStanceMotion ? selectedStance : undefined
+      selectedStance // Always pass stance since all topics support it
     );
   };
 
@@ -82,7 +81,7 @@ export function MotionCard({ motion, onStartSpeech, isLoggedIn = false }: Motion
             {motion.category}
           </Badge>
           <Badge variant="outline" className="text-xs">
-            {isStanceMotion ? "For/Against" : "Opinion"}
+            For/Against/Neutral
           </Badge>
         </div>
         <CardTitle className="text-lg font-bold leading-tight text-foreground">
@@ -96,10 +95,9 @@ export function MotionCard({ motion, onStartSpeech, isLoggedIn = false }: Motion
       </CardHeader>
 
       <CardContent className="space-y-4">
-        {isStanceMotion ? (
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-foreground block">Choose your stance:</label>
-            <div className="grid grid-cols-3 gap-2">
+        <div className="space-y-2">
+          <label className="text-sm font-medium text-foreground block">Choose your stance:</label>
+          <div className="grid grid-cols-3 gap-2">
               <Button
                 variant={selectedStance === "for" ? "default" : "outline"}
                 size="sm"
@@ -144,7 +142,6 @@ export function MotionCard({ motion, onStartSpeech, isLoggedIn = false }: Motion
               </Button>
             </div>
           </div>
-        ) : null}
 
         <div className="space-y-2">
           <label className="text-sm font-medium text-foreground">Speech duration:</label>
@@ -191,7 +188,7 @@ export function MotionCard({ motion, onStartSpeech, isLoggedIn = false }: Motion
         {isLoggedIn ? (
           <Button
             onClick={handleStart}
-            disabled={isStanceMotion && !selectedStance}
+            disabled={!selectedStance}
             className="w-full bg-gradient-primary hover:opacity-90 transition-opacity border-0 text-white font-semibold py-3 h-12"
           >
             <Mic className="w-4 h-4 mr-2" />
@@ -201,7 +198,7 @@ export function MotionCard({ motion, onStartSpeech, isLoggedIn = false }: Motion
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button
-                disabled={isStanceMotion && !selectedStance}
+                disabled={!selectedStance}
                 className="w-full bg-gradient-primary hover:opacity-90 transition-opacity border-0 text-white font-semibold py-3 h-12"
               >
                 <Mic className="w-4 h-4 mr-2" />

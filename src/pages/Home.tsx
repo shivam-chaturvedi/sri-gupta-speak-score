@@ -306,7 +306,7 @@ const Home = () => {
               </div>
               <h3 className="font-semibold text-foreground mb-2">Quick Practice</h3>
               <p className="text-sm text-muted-foreground">
-                60 or 90-second speeches with instant feedback. Perfect for daily practice.
+                60s, 90s, 2-3 minute speeches with instant feedback. Perfect for daily practice.
               </p>
             </CardContent>
           </Card>

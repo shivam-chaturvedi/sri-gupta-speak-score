@@ -550,30 +550,31 @@ Provide analysis in this EXACT JSON format (NO MARKDOWN, NO CODE BLOCKS, JUST PU
   "enhanced_feedback": {
     "argument_analysis": {
       "logical_structure": "DETAILED breakdown: Which premises are strong/weak? Where are logical gaps? What fallacies exist? Rate the argument chain step-by-step.",
-      "evidence_quality": "SPECIFIC assessment: What types of evidence used? What's missing? Which claims need support? Rate evidence on relevance, recency, authority.",
+      "evidence_quality": "SPECIFIC assessment: What logical reasoning frameworks were used? What logical gaps exist? Which premises need strengthening? Rate logical structure on validity, coherence, and reasoning quality. If facts/statistics are mentioned, note they should be cited with sources.",
       "clarity_score": [1-10],
       "persuasiveness": "CONCRETE analysis: What psychological triggers work? What falls flat? How could framing improve? Which words have impact?"
     },
     "data_enhancements": {
-      "statistical_support": [
-        "SPECIFIC STAT: '[Exact number]% of [population] experience [effect] according to [Source, Year]'",
-        "RESEARCH FINDING: 'Study by [Institution] found [specific result]'",
-        "TREND DATA: '[Metric] has increased/decreased by [amount] since [year]'"
+      "logical_frameworks": [
+        "DEDUCTIVE REASONING: 'If [premise A], and [premise B], then [conclusion]. This creates a valid logical structure.'",
+        "INDUCTIVE REASONING: 'Based on [pattern/observation], we can reasonably conclude [generalization].'",
+        "ANALOGICAL REASONING: '[Situation X] is like [Situation Y] because [logical similarity]. Therefore, [conclusion].'",
+        "CAUSAL REASONING: '[Cause] leads to [Effect] through [mechanism]. This logical chain shows [conclusion].'"
       ],
-      "expert_citations": [
-        "QUOTE: '[Expert name], [credentials] states: '[specific quote]''",
-        "AUTHORITY: '[Institution/Organization] reports that [finding]'",
-        "EXPERT CONSENSUS: '[Percentage] of [field] experts agree that [position]'"
+      "premise_strengthening": [
+        "CLARIFY ASSUMPTION: 'Your argument assumes [X]. Either defend this assumption logically or restructure: [alternative premise].'",
+        "ADD PREMISE: 'Add a premise: [premise] to bridge the logical gap between [point A] and [point B].'",
+        "STRENGTHEN LOGIC: 'Your premise [quote] needs logical support. Restructure as: Because [reason], and because [reason], therefore [conclusion].'"
       ],
-      "case_studies": [
-        "REAL EXAMPLE: 'In [location/year], [specific event] resulted in [specific outcome]'",
-        "PRECEDENT: 'When [country/company] implemented [policy], [measurable result]'",
-        "PARALLEL CASE: '[Situation] mirrors current issue and shows [relevant lesson]'"
+      "fallacy_corrections": [
+        "IDENTIFY FALLACY: 'You commit [fallacy name] at [quote]. The logical flaw is [reason]. Correct by [specific fix].'",
+        "AVOID FALLACY: 'Avoid [fallacy name] by [specific logical correction]. Use [reasoning framework] instead.'",
+        "LOGICAL GAP: 'There's a logical gap between [premise] and [conclusion]. Add: [missing logical step].'"
       ],
-      "quantifiable_claims": [
-        "VAGUE → SPECIFIC: Transform '[vague claim]' into '[precise, measurable statement with numbers]'",
-        "ADD METRICS: 'This would save [X dollars/lives/hours] per [timeframe]'",
-        "CONCRETE IMPACT: '[Specific group] would see [measurable benefit] within [timeline]'"
+      "reasoning_improvements": [
+        "LOGICAL STRUCTURE: 'Restructure your argument: [premise 1] + [premise 2] → [conclusion]. This creates a valid logical chain.'",
+        "COUNTERARGUMENT LOGIC: 'Address the logical counterargument: If [opponent's premise], then [their conclusion]. Refute by showing [logical flaw].'",
+        "BURDEN OF PROOF: 'Your argument shifts burden of proof incorrectly. Establish [logical requirement] to meet your burden.'"
       ]
     },
     "counter_arguments": [
@@ -615,16 +616,16 @@ Provide analysis in this EXACT JSON format (NO MARKDOWN, NO CODE BLOCKS, JUST PU
     ],
     "defense_strategies": [
       {
-        "preemptive_defense": "BEFORE THEY ATTACK: '[EXACT WORD-FOR-WORD PHRASE to include in opening that neutralizes counterargument #1. Must be 2-3 sentences, ready to use. Example: \"Some might argue that [counterargument], but this overlooks [key point]. The evidence clearly shows [specific fact].\" Include where to place it: \"Place this immediately after your opening hook, at approximately [X] seconds.\"]",
-        "direct_response": "WHEN CONFRONTED: '[EXACT WORD-FOR-WORD talking points with specific data to counter rebuttal #1. Must include actual statistics/quotes. Example: \"I understand your concern about [counterargument], but [specific statistic] from [source, year] demonstrates [your point]. When [specific case study] was implemented in [location, year], it resulted in [specific outcome].\" Make this 3-4 sentences, ready to deliver.]",
-        "redirect_technique": "PIVOT STRATEGY: '[EXACT WORD-FOR-WORD technique to acknowledge concern then redirect. Example: \"While [concede minor point], the real issue is [your strength]. Consider that [specific example], which shows [your point]. This matters because [specific impact].\" Must be 3-4 sentences, actionable.]",
-        "evidence_arsenal": "WEAPONS: '[Specific statistic with source], [Expert quote with credentials], [Case study with location/year] that defeats their counterargument. List 3-4 specific pieces of evidence, each with source attribution. Example: \"1) The 2023 World Bank report showing [X]% of [population]. 2) Quote from [Expert Name], [Title]: '[exact quote]'. 3) Case study: [Country/Company] implemented [policy] in [year], resulting in [specific outcome].\"]",
+        "preemptive_defense": "BEFORE THEY ATTACK: '[EXACT WORD-FOR-WORD PHRASE to include in opening that neutralizes counterargument #1 using logical reasoning. Must be 2-3 sentences, ready to use. Example: \"Some might argue that [counterargument], but this commits [fallacy name] because [logical reason]. The logical structure of my argument shows [premise→conclusion chain].\" Include where to place it: \"Place this immediately after your opening hook, at approximately [X] seconds.\"]",
+        "direct_response": "WHEN CONFRONTED: '[EXACT WORD-FOR-WORD talking points using logical reasoning to counter rebuttal #1. Focus on logical structure, not unsourced facts. Example: \"I understand your concern about [counterargument], but your reasoning contains [logical flaw]. My argument uses [reasoning framework] where [premise A] and [premise B] logically lead to [conclusion]. Your counterargument assumes [unstated assumption] which I can address by [logical response].\" Make this 3-4 sentences, ready to deliver. If you need facts, say: \"Research shows [claim] - you should verify this from [source type], and it supports my premise because [logical connection].\"]",
+        "redirect_technique": "PIVOT STRATEGY: '[EXACT WORD-FOR-WORD technique to acknowledge logical concern then redirect using reasoning. Example: \"While [concede minor logical point], the real issue is [your logical strength]. Consider the logical structure: if [premise], then [conclusion]. This matters because [logical impact].\" Must be 3-4 sentences, actionable.]",
+        "evidence_arsenal": "LOGICAL ARSENAL: '[Specific reasoning frameworks and logical approaches to use. List 3-4 logical strategies. Example: \"1) Use deductive reasoning: If [premise A], and [premise B], then [conclusion]. 2) Apply analogical reasoning: [Situation X] is like [Situation Y] because [logical similarity]. 3) Use causal reasoning: [Cause] leads to [Effect] through [mechanism]. 4) Address their fallacy: Their argument commits [fallacy name] because [reason].\" If facts are needed, mark as: \"[NEED SOURCE: claim] - verify from [source type] and cite properly.\"]",
         "key_points": [
-          "TALKING POINT 1: [Specific point to make when countering. Example: 'Cite the [Year] [Study] showing [specific result] that contradicts their claim']",
-          "TALKING POINT 2: [Another specific point. Example: 'Reference [Country/Company] case study where [policy] succeeded with [specific outcome]']",
-          "TALKING POINT 3: [Third specific point. Example: 'Use the expert quote from [Expert Name]: \"[exact quote]\" to demonstrate [your point]']",
-          "TALKING POINT 4: [Fourth specific point. Example: 'Present the statistic: [X]% of [population] benefit from [policy] according to [Source, Year]']",
-          "TALKING POINT 5: [Fifth specific point. Example: 'Frame it as: While they focus on [their concern], the real issue is [your strength] which [specific example] demonstrates']"
+          "TALKING POINT 1: [Specific logical point to make when countering. Example: 'Point out their logical fallacy: Their argument commits [fallacy name] because [reason]. A valid logical structure would require [X].']",
+          "TALKING POINT 2: [Another specific logical point. Example: 'Use [reasoning framework]: If [premise A], and [premise B], then [your conclusion]. Their counterargument fails because it assumes [unstated assumption].']",
+          "TALKING POINT 3: [Third specific logical point. Example: 'Strengthen your premise: Your argument assumes [X]. Defend this by showing [logical justification]. Alternatively, restructure: Because [Y], and because [Z], therefore [conclusion].']",
+          "TALKING POINT 4: [Fourth specific logical point. Example: 'Address their logical gap: They claim [X] causes [Y], but this ignores [alternative explanation]. The logical relationship is actually [corrected relationship].']",
+          "TALKING POINT 5: [Fifth specific logical point. Example: 'Reframe using logical structure: While they focus on [their concern], the real logical issue is [your strength]. The valid reasoning chain is: [premise] → [conclusion] because [logical connection].']"
         ]
       },
       {
