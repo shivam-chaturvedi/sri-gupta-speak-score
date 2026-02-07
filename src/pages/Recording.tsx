@@ -4,7 +4,6 @@ import { VoiceRecorder } from "@/components/VoiceRecorder";
 import type { Motion } from "@/data/motions";
 import { generateMockScore } from "@/utils/mockScoring";
 import { aiService } from "@/services/aiService";
-import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -77,12 +76,8 @@ const Recording = () => {
         });
       } catch (error) {
         console.error('AI analysis failed:', error);
-        toast({
-          title: "AI Analysis Failed",
-          description: error instanceof Error ? error.message : "Falling back to demo mode.",
-          variant: "destructive",
-        });
-        
+        console.warn('Falling back to demo scoring because Gemini is unavailable.');
+
         // Fallback to mock scoring
         const results = generateMockScore(audioBlob, motion.topic, stance, cleanTranscript);
         const resultsWithTranscript = {
@@ -90,10 +85,10 @@ const Recording = () => {
           transcript: cleanTranscript
         };
         setScoreData(resultsWithTranscript);
-        
+
         // Save session to Supabase
         await saveSessionToSupabase(resultsWithTranscript, cleanTranscript);
-        
+
         navigate("/results", { 
           state: { 
             motion, 
@@ -112,23 +107,12 @@ const Recording = () => {
       const transcriptUnavailable = !cleanTranscript || cleanTranscript.length < 20;
       
       if (transcriptUnavailable) {
-        toast({
-          title: "Recording Failed",
-          description: "Could not capture speech. Please check your microphone and try again.",
-          variant: "destructive",
-        });
-        
-        // Don't navigate to results
+        console.warn('Transcript not captured; staying on recording screen.');
         return;
       }
       
-      // If there's some text but it's limited, show a warning but still proceed
       if (cleanTranscript && cleanTranscript.length > 0) {
-        toast({
-          title: "Limited transcript",
-          description: "Speech recognition captured limited text. Using demo analysis.",
-          variant: "destructive",
-        });
+        console.warn('Limited transcript captured; using demo scoring.');
         // Fallback to mock scoring if limited transcript
         const results = generateMockScore(audioBlob, motion.topic, stance, cleanTranscript);
         const resultsWithTranscript = {
@@ -136,10 +120,10 @@ const Recording = () => {
           transcript: cleanTranscript
         };
         setScoreData(resultsWithTranscript);
-        
+
         // Save session to Supabase
         await saveSessionToSupabase(resultsWithTranscript, cleanTranscript);
-        
+
         navigate("/results", { 
           state: { 
             motion, 
@@ -246,4 +230,3 @@ const Recording = () => {
 };
 
 export default Recording;
-

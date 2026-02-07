@@ -99,7 +99,7 @@ export function MotionCard({ motion, onStartSpeech, isLoggedIn = false }: Motion
         {isStanceMotion ? (
           <div className="space-y-2">
             <label className="text-sm font-medium text-foreground block">Choose your stance:</label>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <Button
                 variant={selectedStance === "for" ? "default" : "outline"}
                 size="sm"
@@ -128,13 +128,27 @@ export function MotionCard({ motion, onStartSpeech, isLoggedIn = false }: Motion
               >
                 Against
               </Button>
+              <Button
+                variant={selectedStance === "neutral" ? "default" : "outline"}
+                size="sm"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setSelectedStance("neutral");
+                }}
+                className="h-8"
+                type="button"
+                aria-label="Select Neutral stance"
+              >
+                Neutral
+              </Button>
             </div>
           </div>
         ) : null}
 
         <div className="space-y-2">
           <label className="text-sm font-medium text-foreground">Speech duration:</label>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
             <Button
               variant={selectedDuration === 60 ? "default" : "outline"}
               size="sm"
@@ -152,6 +166,24 @@ export function MotionCard({ motion, onStartSpeech, isLoggedIn = false }: Motion
             >
               <Clock className="w-3 h-3 mr-1" />
               90s
+            </Button>
+            <Button
+              variant={selectedDuration === 120 ? "default" : "outline"}
+              size="sm"
+              onClick={() => setSelectedDuration(120)}
+              className="h-8"
+            >
+              <Clock className="w-3 h-3 mr-1" />
+              2 min
+            </Button>
+            <Button
+              variant={selectedDuration === 180 ? "default" : "outline"}
+              size="sm"
+              onClick={() => setSelectedDuration(180)}
+              className="h-8"
+            >
+              <Clock className="w-3 h-3 mr-1" />
+              3 min
             </Button>
           </div>
         </div>

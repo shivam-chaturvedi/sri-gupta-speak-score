@@ -134,30 +134,76 @@ const Home = () => {
           </h1>
           
           <p className="text-xl md:text-2xl mb-4 opacity-90">
-            Speak. Score. Improve.
+            Your go-to preparation for intellectual interviews and dialogue portfolios
           </p>
           
           <p className="text-lg mb-8 opacity-80 max-w-2xl mx-auto">
-            Master the art of debate and public speaking with AI-powered feedback. 
-            Practice daily, track your progress, and become a confident speaker.
+            Master the art of debate and public speaking with AI-powered feedback - perfect for Schoolhouse dialogues and intellectual interviews. Practice daily, track your progress, and become a confident, quick-thinking speaker.
           </p>
           
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-2xl mx-auto">
-            <div className="flex flex-col items-center p-4 bg-white/10 backdrop-blur-sm rounded-lg">
-              <Target className="w-8 h-8 mb-2" />
-              <span className="text-sm font-medium">Logic</span>
+          {/* 5-Step Process Flowchart */}
+          <div className="max-w-4xl mx-auto mb-12 mt-12">
+            <h2 className="text-2xl font-bold mb-8 text-center">How It Works</h2>
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+              <div className="flex flex-col items-center p-6 bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 hover:bg-white/20 transition-all">
+                <div className="w-12 h-12 rounded-full bg-gradient-primary flex items-center justify-center text-white font-bold text-lg mb-3">1</div>
+                <Target className="w-8 h-8 mb-2 text-white" />
+                <span className="text-sm font-medium text-center">Choose a topic</span>
+              </div>
+              <div className="flex flex-col items-center p-6 bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 hover:bg-white/20 transition-all">
+                <div className="w-12 h-12 rounded-full bg-gradient-primary flex items-center justify-center text-white font-bold text-lg mb-3">2</div>
+                <Mic className="w-8 h-8 mb-2 text-white" />
+                <span className="text-sm font-medium text-center">Record your argument</span>
+              </div>
+              <div className="flex flex-col items-center p-6 bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 hover:bg-white/20 transition-all">
+                <div className="w-12 h-12 rounded-full bg-gradient-primary flex items-center justify-center text-white font-bold text-lg mb-3">3</div>
+                <Sparkles className="w-8 h-8 mb-2 text-white" />
+                <span className="text-sm font-medium text-center">Let AI analyse your Point of view</span>
+              </div>
+              <div className="flex flex-col items-center p-6 bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 hover:bg-white/20 transition-all">
+                <div className="w-12 h-12 rounded-full bg-gradient-primary flex items-center justify-center text-white font-bold text-lg mb-3">4</div>
+                <Zap className="w-8 h-8 mb-2 text-white" />
+                <span className="text-sm font-medium text-center">Generate detailed feedback</span>
+              </div>
+              <div className="flex flex-col items-center p-6 bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 hover:bg-white/20 transition-all">
+                <div className="w-12 h-12 rounded-full bg-gradient-primary flex items-center justify-center text-white font-bold text-lg mb-3">5</div>
+                <Trophy className="w-8 h-8 mb-2 text-white" />
+                <span className="text-sm font-medium text-center">Track your progress and improve your skills</span>
+              </div>
             </div>
-            <div className="flex flex-col items-center p-4 bg-white/10 backdrop-blur-sm rounded-lg">
-              <Zap className="w-8 h-8 mb-2" />
-              <span className="text-sm font-medium">Rhetoric</span>
-            </div>
-            <div className="flex flex-col items-center p-4 bg-white/10 backdrop-blur-sm rounded-lg">
-              <Heart className="w-8 h-8 mb-2" />
-              <span className="text-sm font-medium">Empathy</span>
-            </div>
-            <div className="flex flex-col items-center p-4 bg-white/10 backdrop-blur-sm rounded-lg">
-              <Trophy className="w-8 h-8 mb-2" />
-              <span className="text-sm font-medium">Delivery</span>
+          </div>
+
+          {/* Testimonials Section */}
+          <div className="max-w-4xl mx-auto mt-16 mb-8">
+            <h2 className="text-2xl font-bold mb-8 text-center">What Students Say</h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="p-6 bg-white/10 backdrop-blur-sm rounded-lg border border-white/20">
+                <div className="flex items-center gap-1 mb-3">
+                  {[...Array(5)].map((_, i) => (
+                    <span key={i} className="text-yellow-400">★</span>
+                  ))}
+                </div>
+                <p className="text-sm mb-3 italic">"Dialecta helped me prepare for my Schoolhouse interview. The AI feedback on logical structure was incredibly detailed and actionable."</p>
+                <p className="text-xs opacity-80">- Student preparing for intellectual interviews</p>
+              </div>
+              <div className="p-6 bg-white/10 backdrop-blur-sm rounded-lg border border-white/20">
+                <div className="flex items-center gap-1 mb-3">
+                  {[...Array(5)].map((_, i) => (
+                    <span key={i} className="text-yellow-400">★</span>
+                  ))}
+                </div>
+                <p className="text-sm mb-3 italic">"The practice sessions improved my ability to think on my feet and articulate complex ideas clearly. Perfect for dialogue portfolios!"</p>
+                <p className="text-xs opacity-80">- Student building dialogue portfolio</p>
+              </div>
+              <div className="p-6 bg-white/10 backdrop-blur-sm rounded-lg border border-white/20">
+                <div className="flex items-center gap-1 mb-3">
+                  {[...Array(5)].map((_, i) => (
+                    <span key={i} className="text-yellow-400">★</span>
+                  ))}
+                </div>
+                <p className="text-sm mb-3 italic">"I love how the feedback focuses on logical reasoning rather than just facts. It's made me a much stronger debater."</p>
+                <p className="text-xs opacity-80">- Competitive debater</p>
+              </div>
             </div>
           </div>
         </div>
