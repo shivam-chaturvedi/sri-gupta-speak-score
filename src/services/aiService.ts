@@ -96,7 +96,7 @@ export class AIService {
     const stanceDisplay = stance === 'neutral' ? 'NEUTRAL' : stance.toUpperCase();
 
     try {
-      const apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
+      const apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent";
       const payload = {
         contents: [
           {
@@ -165,7 +165,7 @@ CORE PRINCIPLES:
    - Say: "If we assume [fact] is true (which you should verify), then logically..."
    - Make clear when you're using a hypothetical vs. a verified fact
 
-You MUST provide SPECIFIC, ACTIONABLE feedback with EXACT word-for-word examples focusing on logical reasoning. You MUST generate detailed logical counterarguments and defense strategies. NO vague feedback allowed. NO unsourced statistics.
+You MUST provide SPECIFIC, ACTIONABLE feedback with EXACT word-for-word examples focusing on logical reasoning. You MUST generate detailed logical counterarguments and defense strategies (at least 4). NO vague feedback allowed. NO unsourced statistics.
 
 OUTPUT FORMAT - CRITICAL INSTRUCTIONS:
 You MUST provide your analysis in a structured format. You can return it as:
@@ -689,8 +689,7 @@ Provide analysis in this EXACT JSON format (NO MARKDOWN, NO CODE BLOCKS, JUST PU
           "TALKING POINT 1: [Specific logical point to make when countering. Example: 'Point out their logical fallacy: Their argument commits [fallacy name] because [reason]. A valid logical structure would require [X].']",
           "TALKING POINT 2: [Another specific logical point. Example: 'Use [reasoning framework]: If [premise A], and [premise B], then [your conclusion]. Their counterargument fails because it assumes [unstated assumption].']",
           "TALKING POINT 3: [Third specific logical point. Example: 'Strengthen your premise: Your argument assumes [X]. Defend this by showing [logical justification]. Alternatively, restructure: Because [Y], and because [Z], therefore [conclusion].']",
-          "TALKING POINT 4: [Fourth specific logical point. Example: 'Address their logical gap: They claim [X] causes [Y], but this ignores [alternative explanation]. The logical relationship is actually [corrected relationship].']",
-          "TALKING POINT 5: [Fifth specific logical point. Example: 'Reframe using logical structure: While they focus on [their concern], the real logical issue is [your strength]. The valid reasoning chain is: [premise] → [conclusion] because [logical connection].']"
+          "TALKING POINT 4: [Fourth specific logical point. Example: 'Address their logical gap: They claim [X] causes [Y], but this ignores [alternative explanation]. The logical relationship is actually [corrected relationship].']"
         ]
       },
       {
@@ -752,14 +751,14 @@ CRITICAL - MANDATORY SECTIONS - THESE MUST ALWAYS BE INCLUDED:
    - Include "strength_level" ("High", "Medium", or "Low")
    - Include "supporting_logic" (logical reasoning opponent would use)
    - Include "logical_frameworks" (reasoning approaches like deductive, inductive, etc.)
-   - Include "key_points" array with 3-4 specific logical talking points
+   - Include "key_points" array with 4 specific logical talking points
 
 4. "enhanced_feedback.defense_strategies": MUST provide EXACTLY 3 defense strategies (one for each counterargument). Each MUST:
    - Include "preemptive_defense" (2-3 sentences, word-for-word phrases)
    - Include "direct_response" (3-4 sentences, ready to use)
    - Include "redirect_technique" (3-4 sentences, reframing technique)
    - Include "logical_arsenal" (3-4 logical approaches to use)
-   - Include "key_points" array with 4-5 specific talking points
+   - Include "key_points" array with 4 specific talking points
 
 5. "enhanced_feedback.argument_analysis": MUST include:
    - "logical_structure" (detailed breakdown)
@@ -774,24 +773,26 @@ ALL THESE SECTIONS ARE REQUIRED - DO NOT OMIT ANY OF THEM. If a section seems di
 VALIDATION CHECKLIST - Before returning JSON, verify:
 ✓ Every counter_argument.rebuttal is 2-3 sentences and references their actual speech
 ✓ Every counter_argument.supporting_evidence includes specific numbers, dates, and source names
-✓ Every counter_argument.key_points has 3-4 specific talking points (opponent's key arguments)
+✓ Every counter_argument.key_points has 4 specific talking points (opponent's key arguments)
 ✓ Every defense_strategy.direct_response is 3-4 sentences with exact wording
 ✓ Every defense_strategy.evidence_arsenal lists 3-4 specific pieces of evidence with sources
-✓ Every defense_strategy.key_points has 4-5 specific talking points (speaker's defense points)
+✓ Every defense_strategy.key_points has 4 specific talking points (speaker's defense points)
 ✓ All feedback points are specific and actionable (no vague phrases)
 ✓ All feedback references exact quotes from their transcript
 ✓ All arrays have at least 3 items
+✓ Counter and defense key_points lists each have exactly 4 entries and are directly reused in the enhanced argument/defense narratives
 ✓ All key_points are specific, actionable, and include evidence or exact wording
 
 FINAL REMINDER - CRITICAL FOR QUALITY:
 1. Every single feedback point MUST quote their exact words from the transcript
 2. Every suggestion MUST include exact word-for-word replacements, not vague advice
 3. counter_arguments MUST be 3 detailed counterarguments (2-3 sentences each) with specific statistics and sources
-4. counter_arguments.key_points MUST be 3-4 specific talking points the opponent will use (each with evidence/statistics)
+4. counter_arguments.key_points MUST be 4 specific talking points the opponent will use (each with evidence/statistics)
 5. defense_strategies MUST be 3 complete defense strategies (3-4 sentences each) with exact word-for-word phrases ready to use
-6. defense_strategies.key_points MUST be 4-5 specific talking points the speaker should use (each with exact wording, stats, or quotes ready to deliver)
+6. defense_strategies.key_points MUST be 4 specific talking points the speaker should use (each with exact wording, stats, or quotes ready to deliver)
 7. NO generic feedback like "improve your argument" - MUST be specific: "Your premise '[exact quote]' needs [specific statistic] from [source]"
 8. If any section seems incomplete, expand it until it meets the minimum requirements
+9. Explicitly reuse each counter/defense key_point inside the enhanced argument and defense responses so the points are actionable in performance
 
 OUTPUT FORMAT REQUIREMENTS - CRITICAL:
 
