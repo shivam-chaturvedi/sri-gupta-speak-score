@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Mic, Target, Trophy, Zap, Heart, Sparkles, Loader2, User, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -7,10 +7,11 @@ import { MotionCard } from "@/components/MotionCard";
 import { VoiceRecorder } from "@/components/VoiceRecorder";
 import { ScoreDisplay } from "@/components/ScoreDisplay";
 import { ApiKeyModal } from "@/components/ApiKeyModal";
-import { getDailyMotion, getRandomMotions, motions as allMotionsData, type Motion } from "@/data/motions";
+import { motions as allMotionsData, type Motion } from "@/data/motions";
 import { aiService } from "@/services/aiService";
 import { useAuth } from "@/contexts/AuthContext";
 import { Link } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -32,6 +33,33 @@ interface SessionData {
   audioBlob?: Blob;
 }
 
+type TopicMotion = Motion & { isFeatured?: boolean };
+
+const pickRandom = (list: TopicMotion[], count: number, excludeIds: string[] = []) => {
+  const pool = list.filter((m) => !excludeIds.includes(m.id));
+  const picks: TopicMotion[] = [];
+  const used = new Set<string>();
+  while (picks.length < count && pool.length > 0 && used.size < pool.length) {
+    const idx = Math.floor(Math.random() * pool.length);
+    const candidate = pool[idx];
+    if (!used.has(candidate.id)) {
+      used.add(candidate.id);
+      picks.push(candidate);
+    }
+  }
+  return picks;
+};
+
+const pickDailyMotion = (list: TopicMotion[]) => {
+  const featured = list.filter((m) => m.isFeatured);
+  if (featured.length > 0) return featured[0];
+  if (list.length === 0) return allMotionsData[0] as TopicMotion;
+  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  let hash = 0;
+  for (let i = 0; i < today.length; i++) hash = (hash * 31 + today.charCodeAt(i)) >>> 0;
+  return list[hash % list.length];
+};
+
 const Index = () => {
   const { user, signOut } = useAuth();
   const [currentState, setCurrentState] = useState<AppState>("home");
@@ -41,20 +69,46 @@ const Index = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [recorderResetCounter, setRecorderResetCounter] = useState(0);
   const [selectedTheme, setSelectedTheme] = useState<string>("All Themes");
-  const [motions, setMotions] = useState(() => {
-    const daily = getDailyMotion({ stanceOnly: true });
-    const random = getRandomMotions(2, { stanceOnly: true });
+  const [allTopics, setAllTopics] = useState<TopicMotion[]>(allMotionsData);
+  const [motions, setMotions] = useState<TopicMotion[]>(() => {
+    const daily = pickDailyMotion(allMotionsData);
+    const random = pickRandom(allMotionsData, 2, [daily.id]);
     return [daily, ...random];
   });
 
+  useEffect(() => {
+    const loadTopics = async () => {
+      const { data, error } = await supabase.from("topics").select("*");
+      if (error || !data || data.length === 0) return;
+
+      const mapped: TopicMotion[] = data.map((row: any) => ({
+        id: row.id,
+        topic: row.topic,
+        category: row.theme,
+        description: row.description ?? undefined,
+        type: (row.type === "opinion" ? "opinion" : "stance") as "opinion" | "stance",
+        isFeatured: !!row.is_featured,
+      }));
+
+      setAllTopics(mapped);
+      const daily = pickDailyMotion(mapped);
+      const random = pickRandom(mapped, 2, [daily.id]);
+      setMotions([daily, ...random]);
+    };
+
+    loadTopics();
+  }, []);
+
   // Extract unique themes from ALL motions data and sort alphabetically
-  const allThemes = Array.from(new Set(allMotionsData.map(motion => motion.category))).sort();
-  const themeOptions = ["All Themes", ...allThemes];
+  const themeOptions = useMemo(() => {
+    const allThemes = Array.from(new Set(allTopics.map((motion) => motion.category))).sort();
+    return ["All Themes", ...allThemes];
+  }, [allTopics]);
 
   // Filter motions based on selected theme
   const filteredMotions = selectedTheme === "All Themes" 
     ? motions 
-    : allMotionsData.filter(motion => motion.category === selectedTheme);
+    : allTopics.filter(motion => motion.category === selectedTheme);
   
   // Get daily motion for theme-specific filtering
   const dailyMotion = motions[0];
@@ -135,9 +189,8 @@ const Index = () => {
   };
 
   const handleNewTopic = () => {
-    // Generate new random motions
-    const daily = getDailyMotion({ stanceOnly: true });
-    const random = getRandomMotions(2, { stanceOnly: true });
+    const daily = pickDailyMotion(allTopics);
+    const random = pickRandom(allTopics, 2, [daily.id]);
     setMotions([daily, ...random]);
     setCurrentState("home");
     setSessionData(null);
@@ -415,8 +468,8 @@ const Index = () => {
         <div className="text-center">
           <Button
             onClick={() => {
-              const daily = getDailyMotion({ stanceOnly: true });
-              const random = getRandomMotions(2, { stanceOnly: true });
+              const daily = pickDailyMotion(allTopics);
+              const random = pickRandom(allTopics, 2, [daily.id]);
               setMotions([daily, ...random]);
               setSelectedTheme("All Themes");
             }}

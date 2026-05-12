@@ -7,12 +7,12 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import Home from "./pages/Home";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
-import Signup from "./pages/Signup";
 import ForgotPassword from "./pages/ForgotPassword";
 import Progress from "./pages/Progress";
 import Profile from "./pages/Profile";
 import Recording from "./pages/Recording";
 import Results from "./pages/Results";
+import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -30,10 +30,10 @@ const App = () => (
             <Route path="/recording" element={<Recording />} />
             <Route path="/results" element={<Results />} />
             <Route path="/login" element={<Login />} />
-            <Route path="/signup" element={<Signup />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/progress" element={<Progress />} />
             <Route path="/profile" element={<Profile />} />
+            <Route path="/admin" element={<Admin />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

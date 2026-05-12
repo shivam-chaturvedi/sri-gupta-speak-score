@@ -119,7 +119,7 @@ const Login = () => {
             <Shield className="w-8 h-8 text-white" />
           </div>
           <h1 className="text-3xl font-bold text-white mb-2">Dialecta</h1>
-          <p className="text-white/80 text-sm">Premium Research & Consulting Platform</p>
+          <p className="text-white/80 text-sm">Master the art of debate and public speaking</p>
         </div>
 
         {/* Login Card */}
@@ -231,13 +231,7 @@ const Login = () => {
             {/* Footer Links */}
             <div className="mt-6 text-center">
               <p className="text-sm text-muted-foreground">
-                Don't have an account?{' '}
-                <Link 
-                  to="/signup" 
-                  className="font-medium text-primary hover:text-primary/90 transition-colors"
-                >
-                  Create account
-                </Link>
+                Accounts are created by the admin. If you need access, contact support.
               </p>
             </div>
 

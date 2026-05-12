@@ -166,7 +166,9 @@ CORE PRINCIPLES:
    - Say: "If we assume [fact] is true (which you should verify), then logically..."
    - Make clear when you're using a hypothetical vs. a verified fact
 
-You MUST provide SPECIFIC, ACTIONABLE feedback with EXACT word-for-word examples focusing on logical reasoning. You MUST generate detailed logical counterarguments and defense strategies (at least 4) for the chosen stance, and if the speech is NEUTRAL prepare counters and defenses for both sides. NO vague feedback allowed. NO unsourced statistics.
+	You MUST provide SPECIFIC, ACTIONABLE feedback with EXACT word-for-word examples focusing on logical reasoning.
+	You MUST generate exactly 3 counterarguments and exactly 3 defense strategies for the chosen stance (and for NEUTRAL, cover both FOR and AGAINST perspectives within those 3 items).
+	NO vague feedback allowed. NO unsourced statistics.
 
 OUTPUT FORMAT - CRITICAL INSTRUCTIONS:
 You MUST provide your analysis in a structured format. You can return it as:
@@ -213,7 +215,7 @@ ${prompt}`
           temperature: 0.7,
           topP: 0.9,
           topK: 40,
-          maxOutputTokens: 4096,
+          maxOutputTokens: 8192,
         }
       };
 
@@ -360,7 +362,18 @@ ${prompt}`
           console.log('🔍 Response appears to be TEXT format');
         }
         
-        const parsedResult = this.parseAnalysis(analysis, request.transcript);
+        let parsedResult = this.parseAnalysis(analysis, request.transcript);
+
+        // If Gemini output was cut mid-sentence (common when near token limits),
+        // do a small follow-up request to rewrite the truncated fields fully.
+        if (this.needsTruncationRepair(parsedResult)) {
+          console.warn('⚠️ Detected truncated AI output; requesting a repaired completion...');
+          try {
+            parsedResult = await this.repairTruncatedOutput(parsedResult, request, candidate.key);
+          } catch (repairError) {
+            console.warn('⚠️ Truncation repair failed; returning original parsed result.', repairError);
+          }
+        }
         
         console.log('✅ PARSED RESULT:', JSON.stringify(parsedResult, null, 2));
         console.log('✅ ENHANCED ARGUMENT:', parsedResult.enhancedArgument);
@@ -390,6 +403,137 @@ ${prompt}`
       }
       throw new Error('AI analysis failed due to an unknown error. Please try again.');
     }
+  }
+
+  private isLikelyTruncated(text: string | null | undefined): boolean {
+    if (!text) return false;
+    const trimmed = text.trim();
+    if (trimmed.length < 120) return false;
+    if (trimmed.endsWith('…') || trimmed.endsWith('...')) return false;
+
+    // Common symptom: ends with a 1–2 character word ("o", "co", etc.)
+    const lastWord = trimmed.match(/([A-Za-z]+)\s*$/)?.[1];
+    if (lastWord && lastWord.length <= 2) return true;
+
+    // Another symptom: numbered list ends mid-item (e.g. "3. Principles of ... co")
+    if (/\n\s*3\./.test(trimmed) && !/[.!?]"?\s*$/.test(trimmed)) {
+      const lastLine = trimmed.split('\n').slice(-1)[0] || '';
+      if (lastLine.length < 40) return true;
+    }
+
+    // Ends without sentence punctuation and last chunk is short.
+    if (!/[.!?]"?\s*$/.test(trimmed)) {
+      const tail = trimmed.slice(-40);
+      if (!/[.!?]/.test(tail)) return true;
+    }
+
+    return false;
+  }
+
+  private needsTruncationRepair(result: ScoreResult): boolean {
+    const analysis = result.enhancedFeedback?.argumentAnalysis;
+    if (!analysis) return false;
+    return (
+      this.isLikelyTruncated(analysis.logicalStructure) ||
+      this.isLikelyTruncated(analysis.evidenceQuality) ||
+      this.isLikelyTruncated(analysis.persuasiveness) ||
+      this.isLikelyTruncated(result.enhancedArgument)
+    );
+  }
+
+  private async repairTruncatedOutput(
+    current: ScoreResult,
+    request: SpeechAnalysisRequest,
+    apiKey: string
+  ): Promise<ScoreResult> {
+    const apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent";
+    const currentAnalysis = current.enhancedFeedback?.argumentAnalysis;
+    const stance = (request.stance || 'neutral').toUpperCase();
+
+    const prompt = `The previous response was cut off mid-sentence. Rewrite the following fields COMPLETELY (no truncation).
+
+CONTEXT:
+- Topic: ${request.topic}
+- Student stance: ${stance}
+- Transcript: ${request.transcript}
+
+FIELDS (previous partial versions):
+- logical_structure: ${JSON.stringify(currentAnalysis?.logicalStructure || "")}
+- evidence_quality: ${JSON.stringify(currentAnalysis?.evidenceQuality || "")}
+- persuasiveness: ${JSON.stringify(currentAnalysis?.persuasiveness || "")}
+- enhanced_argument: ${JSON.stringify(current.enhancedArgument || "")}
+
+OUTPUT RULES:
+- Return ONLY valid JSON.
+- Keys: logical_structure, evidence_quality, persuasiveness, enhanced_argument
+- Each value must be complete (end with punctuation).
+- Keep each field under 1200 characters, using short paragraphs / bullet lines if needed.
+- Do NOT add any other keys.`;
+
+    const payload = {
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: {
+        temperature: 0.5,
+        topP: 0.9,
+        topK: 40,
+        maxOutputTokens: 2048,
+      },
+    };
+
+    const response = await fetch(apiUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": apiKey,
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Repair request failed (${response.status})`);
+    }
+
+    const data: any = await response.json();
+    const text: string | undefined = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!text) throw new Error("Repair request returned empty text");
+
+    let repaired: any;
+    try {
+      repaired = JSON.parse(text.trim());
+    } catch {
+      // If it's not strict JSON, try extracting the object.
+      const first = text.indexOf("{");
+      const last = text.lastIndexOf("}");
+      if (first === -1 || last === -1 || last <= first) throw new Error("Repair JSON parse failed");
+      repaired = JSON.parse(text.slice(first, last + 1));
+    }
+
+    const next: ScoreResult = {
+      ...current,
+      enhancedArgument: typeof repaired.enhanced_argument === "string" && repaired.enhanced_argument.trim().length > 0
+        ? repaired.enhanced_argument.trim()
+        : current.enhancedArgument,
+      enhancedFeedback: {
+        ...current.enhancedFeedback,
+        argumentAnalysis: {
+          ...current.enhancedFeedback.argumentAnalysis,
+          logicalStructure:
+            typeof repaired.logical_structure === "string" && repaired.logical_structure.trim().length > 0
+              ? repaired.logical_structure.trim()
+              : current.enhancedFeedback.argumentAnalysis.logicalStructure,
+          evidenceQuality:
+            typeof repaired.evidence_quality === "string" && repaired.evidence_quality.trim().length > 0
+              ? repaired.evidence_quality.trim()
+              : current.enhancedFeedback.argumentAnalysis.evidenceQuality,
+          persuasiveness:
+            typeof repaired.persuasiveness === "string" && repaired.persuasiveness.trim().length > 0
+              ? repaired.persuasiveness.trim()
+              : current.enhancedFeedback.argumentAnalysis.persuasiveness,
+        },
+      },
+    };
+
+    return next;
   }
 
   private buildApiKeyCandidates(): ApiKeyCandidate[] {
@@ -2278,6 +2422,7 @@ DO NOT wrap the JSON in markdown code blocks. Return the raw JSON object only.
     const scores = scoreMatches ? scoreMatches.map(m => parseInt(m.match(/\d+/)?.[0] || '0', 10)) : [];
     
     const fullText = analysis.length > 2000 ? analysis.substring(0, 2000) + '...' : analysis;
+    const fallbackMax = 4000;
     
     return {
       score: {
@@ -2295,7 +2440,7 @@ DO NOT wrap the JSON in markdown code blocks. Return the raw JSON object only.
         overall: `Your speech has been analyzed. ${fullText.substring(0, 200)}...`
       },
       missingPoints: ["Review logical structure", "Add specific examples", "Strengthen premises"],
-      enhancedArgument: analysis.length > 500 ? analysis.substring(0, 500) + '...' : analysis,
+      enhancedArgument: analysis.length > fallbackMax ? analysis.substring(0, fallbackMax) + '...' : analysis,
       enhancedFeedback: {
         argumentAnalysis: {
           logicalStructure: this.extractRelevantSection(analysis, 'logical structure') || 'Analysis of logical structure',
@@ -2361,14 +2506,39 @@ DO NOT wrap the JSON in markdown code blocks. Return the raw JSON object only.
     };
   }
 
-  private extractRelevantSection(text: string, keyword: string): string {
+  private extractRelevantSection(text: string, keyword: string, maxLength = 2500): string {
     const lowerText = text.toLowerCase();
-    const keywordIndex = lowerText.indexOf(keyword);
+    const keywordIndex = lowerText.indexOf(keyword.toLowerCase());
     if (keywordIndex === -1) return '';
-    
-    const start = Math.max(0, keywordIndex - 50);
-    const end = Math.min(text.length, keywordIndex + 500);
-    return text.substring(start, end).trim();
+
+    // Capture a whole "section" instead of a tiny fixed window, so users don't see cut-off text
+    // in fallback-mode parsing.
+    const start = Math.max(0, keywordIndex - 120);
+    const hardCap = Math.min(text.length, start + maxLength);
+
+    const afterKeyword = Math.min(text.length, keywordIndex + keyword.length);
+    const tail = text.slice(afterKeyword);
+    const endCandidates: number[] = [];
+
+    // Next blank-line paragraph break
+    const paraBreak = tail.search(/\n\s*\n/);
+    if (paraBreak !== -1) endCandidates.push(afterKeyword + paraBreak);
+
+    // Next heading-ish line (emoji headings, "Clarity Score:", etc.)
+    const headingBreak = tail.search(/\n\s*(?:[#*]{0,3}\s*)?(?:[🎯🧠📌✅❌⚠️]|[A-Z][A-Za-z0-9 &/-]{2,})\s*[:\n]/);
+    if (headingBreak !== -1) endCandidates.push(afterKeyword + headingBreak);
+
+    const bestEnd = Math.min(hardCap, ...(endCandidates.length > 0 ? endCandidates : [hardCap]));
+    let snippet = text.substring(start, bestEnd).trim();
+
+    // If we hit the cap, avoid a hard cut mid-word.
+    if (bestEnd === hardCap && snippet.length >= 80) {
+      const lastSpace = snippet.lastIndexOf(' ');
+      if (lastSpace > snippet.length - 40) snippet = snippet.slice(0, lastSpace).trim();
+      snippet += '…';
+    }
+
+    return snippet;
   }
 
   private buildScoreResultFromParsed(parsed: any, originalTranscript: string): ScoreResult {

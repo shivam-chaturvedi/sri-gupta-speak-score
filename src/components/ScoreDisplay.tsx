@@ -290,11 +290,11 @@ export function ScoreDisplay({
                       <div className="space-y-4">
                         <div>
                           <h5 className="font-medium text-foreground mb-2">Logical Structure</h5>
-                          <p className="text-muted-foreground">{enhancedFeedback.argumentAnalysis.logicalStructure}</p>
+                          <p className="text-muted-foreground whitespace-pre-wrap break-words">{enhancedFeedback.argumentAnalysis.logicalStructure}</p>
                         </div>
                         <div>
                           <h5 className="font-medium text-foreground mb-2">Evidence Quality</h5>
-                          <p className="text-muted-foreground">{enhancedFeedback.argumentAnalysis.evidenceQuality}</p>
+                          <p className="text-muted-foreground whitespace-pre-wrap break-words">{enhancedFeedback.argumentAnalysis.evidenceQuality}</p>
                         </div>
                         <div>
                           <h5 className="font-medium text-foreground mb-2">Clarity Score: {enhancedFeedback.argumentAnalysis.clarityScore}/10</h5>
@@ -302,7 +302,7 @@ export function ScoreDisplay({
                         </div>
                         <div>
                           <h5 className="font-medium text-foreground mb-2">Persuasiveness</h5>
-                          <p className="text-muted-foreground">{enhancedFeedback.argumentAnalysis.persuasiveness}</p>
+                          <p className="text-muted-foreground whitespace-pre-wrap break-words">{enhancedFeedback.argumentAnalysis.persuasiveness}</p>
                         </div>
                       </div>
                     </div>

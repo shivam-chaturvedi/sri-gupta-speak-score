@@ -119,7 +119,7 @@ const Signup = () => {
             <Shield className="w-8 h-8 text-white" />
           </div>
           <h1 className="text-3xl font-bold text-white mb-2">Dialecta</h1>
-          <p className="text-white/80 text-sm">Start Your Speaking Journey</p>
+          <p className="text-white/80 text-sm">Master the art of debate and public speaking</p>
         </div>
 
         {/* Signup Card */}

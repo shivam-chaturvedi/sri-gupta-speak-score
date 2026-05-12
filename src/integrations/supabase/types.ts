@@ -98,11 +98,45 @@ export type Database = {
         }
         Relationships: []
       }
+      topics: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          is_featured: boolean
+          theme: string
+          topic: string
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_featured?: boolean
+          theme: string
+          topic: string
+          type?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_featured?: boolean
+          theme?: string
+          topic?: string
+          type?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
           display_name: string | null
           id: string
+          role: string
           updated_at: string
           user_id: string
         }
@@ -110,6 +144,7 @@ export type Database = {
           created_at?: string
           display_name?: string | null
           id?: string
+          role?: string
           updated_at?: string
           user_id: string
         }
@@ -117,6 +152,7 @@ export type Database = {
           created_at?: string
           display_name?: string | null
           id?: string
+          role?: string
           updated_at?: string
           user_id?: string
         }
