@@ -59,6 +59,7 @@ export function VoiceRecorder({
   const recognitionTranscriptRef = useRef("");
   const currentTranscriptRef = useRef("");
   const isRecordingRef = useRef(false);
+  const recognitionStateRef = useRef<'idle' | 'starting' | 'listening' | 'stopping'>('idle');
   const processedFinalChunksRef = useRef<Set<string>>(new Set()); // Track processed final chunks to avoid duplicates
   const STORAGE_KEY = `dialecta_transcript_${motion.topic}_${stance || 'neutral'}`;
 
@@ -87,6 +88,40 @@ export function VoiceRecorder({
   const updateCurrentTranscript = (value: string) => {
     currentTranscriptRef.current = value;
     setCurrentTranscript(value);
+  };
+
+  const safeStartRecognition = (reason: string): boolean => {
+    if (!speechRecognitionSupported || !recognition) return false;
+    if (recognitionStateRef.current === 'starting' || recognitionStateRef.current === 'listening') return true;
+    if (recognitionStateRef.current === 'stopping') return false;
+
+    try {
+      recognitionStateRef.current = 'starting';
+      recognition.start();
+      console.log(`✅ Speech recognition start requested (${reason})`);
+      return true;
+    } catch (error: any) {
+      if (error?.name === 'InvalidStateError' || String(error?.message || '').includes('already started')) {
+        console.log(`ℹ️ Speech recognition already started (${reason})`);
+        recognitionStateRef.current = 'listening';
+        return true;
+      }
+      recognitionStateRef.current = 'idle';
+      throw error;
+    }
+  };
+
+  const safeStopRecognition = (reason: string): void => {
+    if (!recognition) return;
+    if (recognitionStateRef.current === 'idle' || recognitionStateRef.current === 'stopping') return;
+
+    try {
+      recognitionStateRef.current = 'stopping';
+      recognition.stop();
+      console.log(`🛑 Speech recognition stop requested (${reason})`);
+    } catch {
+      recognitionStateRef.current = 'idle';
+    }
   };
 
   // Utility function to remove consecutive duplicate words
@@ -164,6 +199,7 @@ export function VoiceRecorder({
         setIsListening(true);
         updateCurrentTranscript("");
         console.log('✅ Speech recognition started successfully');
+        recognitionStateRef.current = 'listening';
         setPermissionChecked(true);
       };
       
@@ -218,6 +254,12 @@ export function VoiceRecorder({
       };
       
       recognitionInstance.onerror = (event: any) => {
+        if (event.error === 'no-speech') {
+          // Common during pauses; don't surface as an error.
+          console.log('Speech recognition: no-speech (pause/quiet)');
+          return;
+        }
+
         console.error('Speech recognition error:', event.error);
         if (event.error === 'not-allowed') {
           console.error('Microphone permission denied for speech recognition');
@@ -227,8 +269,6 @@ export function VoiceRecorder({
             "Microphone permission denied for live transcription. Audio will be transcribed after recording."
           );
           setPermissionChecked(true);
-        } else if (event.error === 'no-speech') {
-          console.log('No speech detected (this is normal during pauses)');
         } else if (event.error === 'aborted') {
           console.log('Speech recognition aborted');
           // If aborted and we don't have transcript, use AssemblyAI
@@ -261,6 +301,7 @@ export function VoiceRecorder({
       recognitionInstance.onend = () => {
         setIsListening(false);
         updateCurrentTranscript("");
+        recognitionStateRef.current = 'idle';
         const finalTranscript = removeConsecutiveDuplicates(recognitionTranscriptRef.current.trim());
         if (finalTranscript) {
           updateTranscript(finalTranscript);
@@ -280,8 +321,16 @@ export function VoiceRecorder({
           try {
             setTimeout(() => {
               if (isRecordingRef.current && recognitionInstance) {
-                recognitionInstance.start();
-                console.log('🔄 Auto-restarted speech recognition');
+                if (recognitionStateRef.current === 'idle') {
+                  try {
+                    recognitionStateRef.current = 'starting';
+                    recognitionInstance.start();
+                    console.log('🔄 Auto-restarted speech recognition');
+                  } catch (e) {
+                    recognitionStateRef.current = 'idle';
+                    console.log('Could not auto-restart recognition:', e);
+                  }
+                }
               }
             }, 100);
           } catch (e) {
@@ -357,10 +406,10 @@ export function VoiceRecorder({
     try {
       // Try to start recognition briefly to trigger permission request
       // This must be done in response to user gesture
-      recognition.start();
+      safeStartRecognition('permission-check');
       // Immediately stop it - we just want to trigger the permission prompt
       await new Promise(resolve => setTimeout(resolve, 100));
-      recognition.stop();
+      safeStopRecognition('permission-check');
       return true;
     } catch (error: any) {
       console.log('Speech recognition permission check:', error);
@@ -391,11 +440,8 @@ export function VoiceRecorder({
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       console.log('✅ Microphone access granted for recording, stream active:', stream.active);
       
-      // Request speech recognition permission separately
-      if (speechRecognitionSupported && recognition) {
-        console.log('Requesting speech recognition permission...');
-        await requestSpeechRecognitionPermission();
-      }
+      // Don’t do a separate start/stop permission probe here: it can race with the real
+      // transcription start and trigger `InvalidStateError: recognition has already started`.
       
       const mediaRecorder = new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
@@ -435,7 +481,7 @@ export function VoiceRecorder({
         // Stop speech recognition and wait for it to finish
         if (recognition && isListening) {
           try {
-            recognition.stop();
+            safeStopRecognition('recording-stop');
             // Wait for onend to fire
             await new Promise(resolve => setTimeout(resolve, 500));
           } catch (e) {
@@ -503,8 +549,8 @@ export function VoiceRecorder({
           updateRecognitionTranscript("");
           updateTranscript("");
           updateCurrentTranscript("");
-          recognition.start();
-          console.log('✅ Speech recognition started for transcription');
+          // Don’t start here; we start once right when recording begins (after prep)
+          // to avoid double-start races (`InvalidStateError: recognition has already started`).
         } catch (error: any) {
           console.error('Speech recognition start error:', error);
           if (error.name === 'NotAllowedError' || error.message?.includes('not-allowed')) {
@@ -518,20 +564,8 @@ export function VoiceRecorder({
               console.log('🔄 Will use AssemblyAI fallback for transcription');
             }
           } else {
-            // Try to restart if already started
-            if (recognition) {
-              try {
-                recognition.stop();
-                setTimeout(() => {
-                  if (recognition) {
-                    recognition.start();
-                    console.log('🔄 Restarted speech recognition');
-                  }
-                }, 100);
-              } catch (e) {
-                console.error('Failed to restart recognition:', e);
-              }
-            }
+            // Avoid restart loops; fall back to AssemblyAI if available.
+            if (isAssemblyAIAvailable()) setUsingAssemblyAIFallback(true);
           }
         }
       } else if (!speechRecognitionSupported) {
@@ -559,12 +593,12 @@ export function VoiceRecorder({
             setRecordTime(0);
             
             // Ensure speech recognition is running before starting media recorder
-            if (recognition && !isListening && speechRecognitionSupported) {
+            if (recognition && speechRecognitionSupported) {
               try {
-                recognition.start();
-                console.log('Speech recognition started at recording start');
+                safeStartRecognition('recording-start');
               } catch (e) {
-                console.log('Recognition start error (may already be running):', e);
+                console.log('Recognition start error:', e);
+                if (isAssemblyAIAvailable()) setUsingAssemblyAIFallback(true);
               }
             }
             // Note: AssemblyAI will be used after recording stops if needed

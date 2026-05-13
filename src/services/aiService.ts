@@ -370,6 +370,11 @@ ${prompt}`
           console.warn('⚠️ Detected truncated AI output; requesting a repaired completion...');
           try {
             parsedResult = await this.repairTruncatedOutput(parsedResult, request, candidate.key);
+            // Rarely, even the repair can truncate; retry once more.
+            if (this.needsTruncationRepair(parsedResult)) {
+              console.warn('⚠️ Repair output still appears truncated; retrying repair once...');
+              parsedResult = await this.repairTruncatedOutput(parsedResult, request, candidate.key);
+            }
           } catch (repairError) {
             console.warn('⚠️ Truncation repair failed; returning original parsed result.', repairError);
           }
@@ -409,7 +414,8 @@ ${prompt}`
     if (!text) return false;
     const trimmed = text.trim();
     if (trimmed.length < 120) return false;
-    if (trimmed.endsWith('…') || trimmed.endsWith('...')) return false;
+    // If the model ends with an ellipsis, it's usually a truncation symptom.
+    if (trimmed.endsWith('…') || trimmed.endsWith('...')) return true;
 
     // Common symptom: ends with a 1–2 character word ("o", "co", etc.)
     const lastWord = trimmed.match(/([A-Za-z]+)\s*$/)?.[1];
@@ -432,12 +438,20 @@ ${prompt}`
 
   private needsTruncationRepair(result: ScoreResult): boolean {
     const analysis = result.enhancedFeedback?.argumentAnalysis;
-    if (!analysis) return false;
+    const categoryFeedback = result.feedback
+      ? [result.feedback.logic, result.feedback.rhetoric, result.feedback.empathy, result.feedback.delivery].join("\n")
+      : "";
+    const missing = Array.isArray(result.missingPoints) ? result.missingPoints.join("\n") : "";
+
     return (
-      this.isLikelyTruncated(analysis.logicalStructure) ||
-      this.isLikelyTruncated(analysis.evidenceQuality) ||
-      this.isLikelyTruncated(analysis.persuasiveness) ||
-      this.isLikelyTruncated(result.enhancedArgument)
+      (analysis ? (
+        this.isLikelyTruncated(analysis.logicalStructure) ||
+        this.isLikelyTruncated(analysis.evidenceQuality) ||
+        this.isLikelyTruncated(analysis.persuasiveness)
+      ) : false) ||
+      this.isLikelyTruncated(result.enhancedArgument) ||
+      this.isLikelyTruncated(categoryFeedback) ||
+      this.isLikelyTruncated(missing)
     );
   }
 
@@ -462,12 +476,18 @@ FIELDS (previous partial versions):
 - evidence_quality: ${JSON.stringify(currentAnalysis?.evidenceQuality || "")}
 - persuasiveness: ${JSON.stringify(currentAnalysis?.persuasiveness || "")}
 - enhanced_argument: ${JSON.stringify(current.enhancedArgument || "")}
+- logic_feedback: ${JSON.stringify(current.feedback?.logic || "")}
+- rhetoric_feedback: ${JSON.stringify(current.feedback?.rhetoric || "")}
+- empathy_feedback: ${JSON.stringify(current.feedback?.empathy || "")}
+- delivery_feedback: ${JSON.stringify(current.feedback?.delivery || "")}
+- missing_points: ${JSON.stringify(current.missingPoints || [])}
 
 OUTPUT RULES:
 - Return ONLY valid JSON.
-- Keys: logical_structure, evidence_quality, persuasiveness, enhanced_argument
+- Keys: logical_structure, evidence_quality, persuasiveness, enhanced_argument, logic_feedback, rhetoric_feedback, empathy_feedback, delivery_feedback, missing_points
 - Each value must be complete (end with punctuation).
-- Keep each field under 1200 characters, using short paragraphs / bullet lines if needed.
+- Keep each string field under 1200 characters, using short paragraphs / bullet lines if needed.
+- missing_points must be an array of 3-6 short strings.
 - Do NOT add any other keys.`;
 
     const payload = {
@@ -476,7 +496,7 @@ OUTPUT RULES:
         temperature: 0.5,
         topP: 0.9,
         topK: 40,
-        maxOutputTokens: 2048,
+        maxOutputTokens: 4096,
       },
     };
 
@@ -513,6 +533,24 @@ OUTPUT RULES:
       enhancedArgument: typeof repaired.enhanced_argument === "string" && repaired.enhanced_argument.trim().length > 0
         ? repaired.enhanced_argument.trim()
         : current.enhancedArgument,
+      feedback: {
+        ...current.feedback,
+        logic: typeof repaired.logic_feedback === "string" && repaired.logic_feedback.trim().length > 0
+          ? repaired.logic_feedback.trim()
+          : current.feedback.logic,
+        rhetoric: typeof repaired.rhetoric_feedback === "string" && repaired.rhetoric_feedback.trim().length > 0
+          ? repaired.rhetoric_feedback.trim()
+          : current.feedback.rhetoric,
+        empathy: typeof repaired.empathy_feedback === "string" && repaired.empathy_feedback.trim().length > 0
+          ? repaired.empathy_feedback.trim()
+          : current.feedback.empathy,
+        delivery: typeof repaired.delivery_feedback === "string" && repaired.delivery_feedback.trim().length > 0
+          ? repaired.delivery_feedback.trim()
+          : current.feedback.delivery,
+      },
+      missingPoints: Array.isArray(repaired.missing_points) && repaired.missing_points.filter((x: any) => typeof x === "string" && x.trim().length > 0).length > 0
+        ? repaired.missing_points.map((x: any) => String(x).trim()).filter((x: string) => x.length > 0)
+        : current.missingPoints,
       enhancedFeedback: {
         ...current.enhancedFeedback,
         argumentAnalysis: {
