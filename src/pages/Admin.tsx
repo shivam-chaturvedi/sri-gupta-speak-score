@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Home } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -24,6 +25,12 @@ import {
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "react-router-dom";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { AdminNewsletterPanel } from "@/components/admin/AdminNewsletterPanel";
+import { useLocalStorageState } from "@/hooks/useLocalStorageState";
+
+const ADMIN_TAB_KEY = "dialecta-admin-active-tab";
+type AdminTab = "topics" | "newsletter";
 
 type TopicRow = {
   id: string;
@@ -41,6 +48,12 @@ const THEMES = ["Ethics", "Politics", "Education", "Technology", "Abstract", "Po
 export default function Admin() {
   const { toast } = useToast();
   const { user } = useAuth();
+  const [adminTab, setAdminTab] = useLocalStorageState<AdminTab>(
+    ADMIN_TAB_KEY,
+    "topics",
+    (v) => v,
+    (raw) => (raw === "newsletter" ? "newsletter" : "topics"),
+  );
   const [topics, setTopics] = useState<TopicRow[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [query, setQuery] = useState("");
@@ -214,13 +227,33 @@ export default function Admin() {
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-6xl mx-auto p-4 py-10 space-y-6">
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex items-start justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold text-foreground">Admin</h1>
-            <p className="text-muted-foreground">Add, update, delete, and feature challenge topics.</p>
+            <p className="text-muted-foreground">Manage debate topics and newsletter subscribers.</p>
           </div>
+          <Button variant="outline" asChild className="shrink-0">
+            <Link to="/">
+              <Home className="w-4 h-4 mr-2" />
+              Go to Home
+            </Link>
+          </Button>
+        </div>
+
+        <Tabs
+          value={adminTab}
+          onValueChange={(v) => setAdminTab(v as AdminTab)}
+          className="w-full"
+        >
+          <TabsList>
+            <TabsTrigger value="topics">Topics</TabsTrigger>
+            <TabsTrigger value="newsletter">Newsletter</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="topics" className="space-y-6 mt-6">
+        <div className="flex justify-end">
           <Button variant="outline" onClick={loadTopics} disabled={isLoading}>
-            {isLoading ? "Refreshing..." : "Refresh"}
+            {isLoading ? "Refreshing..." : "Refresh topics"}
           </Button>
         </div>
 
@@ -337,6 +370,12 @@ export default function Admin() {
             </Table>
           </CardContent>
         </Card>
+          </TabsContent>
+
+          <TabsContent value="newsletter" className="mt-6">
+            <AdminNewsletterPanel />
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );

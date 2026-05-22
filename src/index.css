@@ -129,3 +129,20 @@ All colors MUST be HSL.
     @apply bg-background text-foreground;
   }
 }
+
+/* Admin newsletter rich text editor (TipTap) */
+.newsletter-editor .ProseMirror {
+  min-height: 200px;
+}
+
+.newsletter-editor .ProseMirror p.is-editor-empty:first-child::before {
+  color: hsl(var(--muted-foreground));
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+.newsletter-editor .ProseMirror a {
+  @apply text-primary underline;
+}

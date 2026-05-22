@@ -7,6 +7,7 @@ import { MotionCard } from "@/components/MotionCard";
 import { VoiceRecorder } from "@/components/VoiceRecorder";
 import { ScoreDisplay } from "@/components/ScoreDisplay";
 import { ApiKeyModal } from "@/components/ApiKeyModal";
+import { NewsletterSubscribeBlock } from "@/components/NewsletterSubscribeBlock";
 import { motions as allMotionsData, type Motion } from "@/data/motions";
 import { aiService } from "@/services/aiService";
 import { useAuth } from "@/contexts/AuthContext";
@@ -323,6 +324,8 @@ const Index = () => {
           <p className="text-lg mb-8 opacity-80 max-w-2xl mx-auto">
             Master the art of debate and public speaking with AI-powered feedback - perfect for Schoolhouse dialogues and intellectual interviews. Practice daily, track your progress, and become a confident, quick-thinking speaker.
           </p>
+
+          <NewsletterSubscribeBlock />
           
           {/* 5-Step Process Flowchart */}
           <div className="max-w-4xl mx-auto mb-12 mt-12">
