@@ -21,6 +21,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { NEWSLETTER_CATEGORIES } from "@/components/NewsletterSubscribeBlock";
 import { useLocalStorageState } from "@/hooks/useLocalStorageState";
+import { aiService } from "@/services/aiService";
 
 const NEWSLETTER_DRAFT_KEY = "dialecta-admin-newsletter-draft";
 
@@ -68,6 +69,7 @@ export function AdminNewsletterPanel() {
   const [subscribers, setSubscribers] = useState<SubscriptionRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
+  const [drafting, setDrafting] = useState(false);
 
   const [draft, setDraft] = useLocalStorageState<NewsletterDraft>(
     NEWSLETTER_DRAFT_KEY,
@@ -153,6 +155,88 @@ export function AdminNewsletterPanel() {
   };
 
   const clearTopicFilters = () => setFilterTopics(new Set());
+
+  const writeWithAI = async () => {
+    if (filterTopics.size === 0) {
+      toast({
+        title: "Select at least one topic",
+        description: "Pick the topic(s) you want the AI newsletter to cover.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setDrafting(true);
+    try {
+      const selected = NEWSLETTER_CATEGORIES.filter((c) => filterTopics.has(c.id)).map((c) => ({
+        id: c.id,
+        label: c.label,
+      }));
+
+      const { data, error } = await supabase.functions.invoke("fetch-news-context", {
+        body: {
+          topics: selected.map((t) => t.id),
+          days: 7,
+          perTopicLimit: 6,
+        },
+      });
+
+      if (error) {
+        throw new Error(error.message || "Failed to fetch news context");
+      }
+
+      const payload = (data ?? {}) as {
+        success?: boolean;
+        error?: string;
+        all?: Array<{
+          title: string;
+          url: string;
+          source: string;
+          publishedAt: string;
+          snippet?: string;
+          matchedTopics?: string[];
+        }>;
+      };
+
+      if (!payload.success) {
+        throw new Error(payload.error || "Failed to fetch news context");
+      }
+
+      const articles = Array.isArray(payload.all) ? payload.all : [];
+      if (articles.length === 0) {
+        toast({
+          title: "No recent articles found",
+          description:
+            "I couldn't find enough RSS items for the selected topics in the last 7 days. Try selecting more topics or try again later.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const drafted = await aiService.draftNewsletterEmail({
+        brandName: "Dialecta Daily",
+        selectedTopics: selected,
+        articles,
+      });
+
+      setSubject(drafted.subject);
+      setContent(drafted.html);
+
+      toast({
+        title: "Draft created",
+        description: "Subject and email body were filled in. Review and send when ready.",
+      });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to draft newsletter";
+      toast({
+        title: "AI draft failed",
+        description: message,
+        variant: "destructive",
+      });
+    } finally {
+      setDrafting(false);
+    }
+  };
 
   const sendNewsletter = async () => {
     if (!subject.trim()) {
@@ -327,23 +411,42 @@ export function AdminNewsletterPanel() {
             <NewsletterRichTextEditor value={content} onChange={setContent} />
           </div>
 
-          <Button
-            onClick={sendNewsletter}
-            disabled={sending || recipientEmails.length === 0}
-            className="w-full sm:w-auto"
-          >
-            {sending ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Sending…
-              </>
-            ) : (
-              <>
-                <Send className="w-4 h-4 mr-2" />
-                Send to {recipientEmails.length} subscriber{recipientEmails.length !== 1 ? "s" : ""}
-              </>
-            )}
-          </Button>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <Button
+              onClick={sendNewsletter}
+              disabled={sending || drafting || recipientEmails.length === 0}
+              className="w-full sm:w-auto"
+            >
+              {sending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Sending…
+                </>
+              ) : (
+                <>
+                  <Send className="w-4 h-4 mr-2" />
+                  Send to {recipientEmails.length} subscriber{recipientEmails.length !== 1 ? "s" : ""}
+                </>
+              )}
+            </Button>
+
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={writeWithAI}
+              disabled={drafting || sending || filterTopics.size === 0}
+              className="w-full sm:w-auto"
+            >
+              {drafting ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Writing with AI…
+                </>
+              ) : (
+                "Write with AI"
+              )}
+            </Button>
+          </div>
         </CardContent>
       </Card>
 

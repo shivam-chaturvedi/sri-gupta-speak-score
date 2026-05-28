@@ -1,0 +1,48 @@
+News sources and feed/home URLs used for newsletter context collection (prefer RSS where possible).
+
+The Hindu
+- https://www.thehindu.com/feeder/default.rss
+
+NYT
+- https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml
+- https://rss.nytimes.com/services/xml/rss/nyt/World.xml
+- https://rss.nytimes.com/services/xml/rss/nyt/Business.xml
+- https://rss.nytimes.com/services/xml/rss/nyt/Technology.xml
+
+BBC
+- https://feeds.bbci.co.uk/news/rss.xml
+- https://feeds.bbci.co.uk/news/world/rss.xml
+- https://feeds.bbci.co.uk/news/business/rss.xml
+- https://feeds.bbci.co.uk/news/technology/rss.xml
+
+The Guardian
+- https://www.theguardian.com/international/rss
+- https://www.theguardian.com/world/rss
+- https://www.theguardian.com/technology/rss
+- https://www.theguardian.com/business/rss
+
+Al Jazeera
+- https://www.aljazeera.com/xml/rss/all.xml
+
+Mint (Livemint)
+- https://www.livemint.com/rss/news
+- https://www.livemint.com/rss/companies
+- https://www.livemint.com/rss/technology
+
+Financial Times
+- https://www.ft.com/?format=rss
+
+Economic Times
+- https://economictimes.indiatimes.com/rssfeedsdefault.cms
+- https://economictimes.indiatimes.com/rssfeeds/13352306.cms
+- https://economictimes.indiatimes.com/rssfeeds/78570530.cms
+
+Mid-Day
+- https://www.mid-day.com/rss
+
+Vogue
+- https://www.vogue.com/rss
+
+Conde Nast (general)
+- https://www.condenast.com/rss
+

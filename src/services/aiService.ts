@@ -90,6 +90,85 @@ export class AIService {
     this.persistManualKey(this.manualApiKey);
   }
 
+  /**
+   * Draft a newsletter subject + HTML body using Gemini.
+   * Returns { subject, html } and keeps parsing tolerant (models sometimes wrap JSON in fences).
+   */
+  async draftNewsletterEmail(input: {
+    brandName?: string;
+    selectedTopics: Array<{ id: string; label: string }>;
+    articles: Array<{
+      title: string;
+      url: string;
+      source: string;
+      publishedAt: string;
+      snippet?: string;
+      matchedTopics?: string[];
+    }>;
+  }): Promise<{ subject: string; html: string; rawText: string }> {
+    const brandName = (input.brandName || "Dialecta Daily").trim() || "Dialecta Daily";
+    const topicsLine = input.selectedTopics.map((t) => t.label).join(", ");
+
+    const articlesText = input.articles
+      .slice(0, 60)
+      .map((a, i) => {
+        const date = a.publishedAt ? new Date(a.publishedAt).toDateString() : "";
+        const matched = (a.matchedTopics || []).join(", ");
+        const snippet = (a.snippet || "").replace(/\s+/g, " ").trim();
+        return [
+          `${i + 1}. ${a.title}`,
+          `   Source: ${a.source}${date ? ` (${date})` : ""}`,
+          `   URL: ${a.url}`,
+          matched ? `   Topics: ${matched}` : "",
+          snippet ? `   Snippet: ${snippet}` : "",
+        ]
+          .filter(Boolean)
+          .join("\n");
+      })
+      .join("\n\n");
+
+    const prompt = `You are an expert newsletter editor.
+
+TASK:
+Draft an email newsletter for "${brandName}" for the following selected topics:
+${topicsLine}
+
+INPUT ARTICLES (this week / latest; may include duplicates and mixed topics):
+${articlesText || "(No articles found)"} 
+
+OUTPUT REQUIREMENTS:
+- Return ONLY valid JSON (no markdown fences).
+- Keys: subject, html
+- subject: <= 90 characters, engaging but not clickbait.
+- html: clean, email-safe HTML (no external CSS), using only:
+  - <h2>, <h3>, <p>, <ul>, <ol>, <li>, <strong>, <em>, <a>
+- The HTML should be ready to paste into a rich-text editor.
+- Structure:
+  1) A short opener paragraph.
+  2) For each selected topic: a <h2> heading and 3-6 bullet items.
+     Each bullet includes a short summary + a link to the article (anchor text: source).
+  3) A short closing line.
+- If articles are thin for a topic, write a brief "What we're watching" section for that topic with 2-3 forward-looking bullets (no made-up facts, just reasonable watchpoints).
+
+IMPORTANT:
+- Do not invent facts. Use only what is in titles/snippets.
+- Prefer variety of sources; avoid repeating the same outlet back-to-back.
+`;
+
+    const rawText = await this.callGeminiText(prompt, {
+      temperature: 0.6,
+      maxOutputTokens: 2048,
+    });
+
+    const parsed = this.parseJsonFromModelText(rawText);
+    const subject = typeof parsed?.subject === "string" ? parsed.subject.trim() : "";
+    const html = typeof parsed?.html === "string" ? parsed.html.trim() : "";
+    if (!subject || !html) {
+      throw new Error("AI draft returned an invalid format (missing subject/html).");
+    }
+    return { subject, html, rawText };
+  }
+
   async analyzeSpeeches(request: SpeechAnalysisRequest): Promise<ScoreResult> {
     const prompt = this.buildAnalysisPrompt(request);
     const stance = request.stance || 'neutral';
@@ -661,6 +740,112 @@ OUTPUT RULES:
   }
 
   private static readonly GEMINI_ALL_KEYS_BUSY_MESSAGE = 'Gemini is on a latte break and every API key is busy dancing with tokens. Take a breath, sip something cozy, and try again in a minute.';
+
+  private async callGeminiText(
+    prompt: string,
+    generationConfig: { temperature?: number; maxOutputTokens?: number } = {},
+  ): Promise<string> {
+    const apiUrl =
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent";
+
+    const payload = {
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: {
+        temperature: typeof generationConfig.temperature === "number" ? generationConfig.temperature : 0.7,
+        topP: 0.9,
+        topK: 40,
+        maxOutputTokens:
+          typeof generationConfig.maxOutputTokens === "number" ? generationConfig.maxOutputTokens : 4096,
+      },
+    };
+
+    const candidates = this.buildApiKeyCandidates();
+    if (candidates.length === 0) {
+      throw new Error("API key not set. Please provide your Google Gemini API key.");
+    }
+
+    let lastError: Error | null = null;
+
+    for (let attemptIndex = 0; attemptIndex < candidates.length; attemptIndex++) {
+      const candidate = candidates[attemptIndex];
+      let response: Response;
+
+      try {
+        response = await fetch(apiUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-goog-api-key": candidate.key,
+          },
+          body: JSON.stringify(payload),
+        });
+      } catch (fetchError) {
+        lastError = fetchError instanceof Error ? fetchError : new Error(String(fetchError));
+        throw lastError;
+      }
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        const errorMessage = this.buildErrorMessage(response.status, response.statusText, errorText);
+        lastError = new Error(errorMessage);
+
+        // Rotate only for transient-ish issues.
+        if ((response.status === 400 || response.status === 429) && attemptIndex < candidates.length - 1) {
+          continue;
+        }
+        throw lastError;
+      }
+
+      let data: any;
+      try {
+        data = await response.json();
+      } catch (jsonError) {
+        lastError = jsonError instanceof Error ? jsonError : new Error(String(jsonError));
+        throw lastError;
+      }
+
+      if (data?.error) {
+        const errorCode = data.error.code || data.error.errorCode || 0;
+        lastError = new Error(`AI API error: ${data.error.message || JSON.stringify(data.error)}`);
+        if ((errorCode === 400 || errorCode === 429) && attemptIndex < candidates.length - 1) {
+          continue;
+        }
+        throw lastError;
+      }
+
+      const text: string | undefined = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!text) {
+        throw new Error("Empty response from AI service");
+      }
+
+      this.markEnvKeyAsUsed(candidate);
+      return text;
+    }
+
+    console.warn("All Gemini API keys failed; returning last error.", lastError);
+    throw lastError ?? new Error(AIService.GEMINI_ALL_KEYS_BUSY_MESSAGE);
+  }
+
+  private parseJsonFromModelText(text: string): any {
+    const raw = String(text || "").trim();
+    const unfenced = raw.replace(/```(?:json)?/gi, "").replace(/```/g, "").trim();
+    const firstBrace = unfenced.indexOf("{");
+    const lastBrace = unfenced.lastIndexOf("}");
+    if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
+      return null;
+    }
+    const candidate = unfenced.slice(firstBrace, lastBrace + 1);
+    try {
+      return JSON.parse(candidate);
+    } catch {
+      // Last-ditch: balance braces for minor truncations.
+      try {
+        return JSON.parse(this.balanceJsonBraces(candidate));
+      } catch {
+        return null;
+      }
+    }
+  }
 
   private balanceJsonBraces(json: string): string {
     const openCount = (json.match(/\{/g) || []).length;
