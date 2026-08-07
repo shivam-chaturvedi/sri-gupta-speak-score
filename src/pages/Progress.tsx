@@ -7,9 +7,26 @@ import { Progress as ProgressBar } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Trophy, Calendar, Star, Target, Zap, TrendingUp, Award, Crown, ArrowLeft } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Trophy, Calendar, Star, Target, Zap, TrendingUp, Award, Crown, ArrowLeft, BookOpen } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Navigate, Link } from 'react-router-dom';
+import { ScoreDisplay } from '@/components/ScoreDisplay';
+import {
+  loadSpeakerProfile,
+  type SpeakerProfileSummary,
+} from '@/services/speakerProfile';
+import {
+  ALL_CRITERIA,
+  CRITERION_LABELS,
+  type AssessmentCriterion,
+  type FeedbackLengthMinutes,
+} from '@/types/feedback';
 
 interface UserProgress {
   total_points: number;
@@ -48,6 +65,9 @@ interface Session {
   score_empathy: number | null;
   score_delivery: number | null;
   created_at: string;
+  audio_url?: string | null;
+  feedback_length_minutes?: number | null;
+  selected_criteria?: string[] | null;
 }
 
 const ICON_MAP = {
@@ -74,6 +94,8 @@ const Progress = () => {
   const [sessionStats, setSessionStats] = useState<SessionStats | null>(null);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [speakerProfile, setSpeakerProfile] = useState<SpeakerProfileSummary | null>(null);
+  const [selectedSession, setSelectedSession] = useState<Session | null>(null);
 
   useEffect(() => {
     if (user && !loading) {
@@ -134,35 +156,54 @@ const Progress = () => {
         earned_at: item.earned_at
       })) || []);
 
-      // Fetch session statistics with all data for display
-      const { data: sessionsData, error: sessionsError } = await supabase
-        .from('debate_sessions')
-        .select('id, motion_topic, stance, overall_score, duration, transcript, feedback, score_logic, score_rhetoric, score_empathy, score_delivery, created_at')
-        .eq('user_id', user!.id)
-        .order('created_at', { ascending: false });
+      const withExtras = await supabase
+        .from("debate_sessions")
+        .select(
+          "id, motion_topic, stance, overall_score, duration, transcript, feedback, score_logic, score_rhetoric, score_empathy, score_delivery, created_at, audio_url, feedback_length_minutes, selected_criteria",
+        )
+        .eq("user_id", user!.id)
+        .order("created_at", { ascending: false });
 
-      if (sessionsError) throw sessionsError;
+      let sessionsData = withExtras.data as Session[] | null;
+      if (withExtras.error) {
+        const fallback = await supabase
+          .from("debate_sessions")
+          .select(
+            "id, motion_topic, stance, overall_score, duration, transcript, feedback, score_logic, score_rhetoric, score_empathy, score_delivery, created_at",
+          )
+          .eq("user_id", user!.id)
+          .order("created_at", { ascending: false });
+        if (fallback.error) throw fallback.error;
+        sessionsData = fallback.data as Session[];
+      }
 
       if (sessionsData) {
-        // Store all sessions for display
-        setSessions(sessionsData as Session[]);
-        
-        const validSessions = sessionsData.filter(s => s.overall_score !== null);
+        setSessions(sessionsData);
+
+        const validSessions = sessionsData.filter((s) => s.overall_score !== null);
         const totalSessions = validSessions.length;
-        const averageScore = totalSessions > 0 
-          ? Math.round(validSessions.reduce((sum, s) => sum + s.overall_score, 0) / totalSessions)
-          : 0;
-        const perfectScores = validSessions.filter(s => s.overall_score === 100).length;
+        const averageScore =
+          totalSessions > 0
+            ? Math.round(
+                validSessions.reduce((sum, s) => sum + (s.overall_score || 0), 0) /
+                  totalSessions,
+              )
+            : 0;
+        const perfectScores = validSessions.filter(
+          (s) => (s.overall_score || 0) >= 27,
+        ).length;
 
         setSessionStats({
           total_sessions: totalSessions,
           average_score: averageScore,
-          perfect_scores: perfectScores
+          perfect_scores: perfectScores,
         });
 
-        // Update progress with session data (but don't call fetchProgressData again to avoid infinite loop)
         await updateProgressFromSessions(validSessions, false);
       }
+
+      const profile = await loadSpeakerProfile(user!.id);
+      setSpeakerProfile(profile);
 
     } catch (error) {
       console.error('Error fetching progress data:', error);
@@ -519,63 +560,140 @@ const Progress = () => {
               </Card>
             </div>
 
-            {/* Session History */}
+            {/* Speaker profile */}
+            {speakerProfile && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <TrendingUp className="w-5 h-5" />
+                    Speaker profile
+                  </CardTitle>
+                  <CardDescription>
+                    Patterns across {speakerProfile.sessionCount} recent session
+                    {speakerProfile.sessionCount === 1 ? "" : "s"} — used to tailor your next feedback
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    {ALL_CRITERIA.map((c) => {
+                      const avg = speakerProfile.averages[c];
+                      return (
+                        <div key={c} className="rounded-lg border p-3">
+                          <div className="text-xs text-muted-foreground mb-1">
+                            {CRITERION_LABELS[c]}
+                          </div>
+                          <div className="text-xl font-semibold">
+                            {avg != null ? `${avg}%` : "—"}
+                          </div>
+                          <ProgressBar value={avg ?? 0} className="h-1.5 mt-2" />
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {speakerProfile.weakest.map((c) => (
+                      <Badge key={`w-${c}`} variant="destructive">
+                        Focus: {CRITERION_LABELS[c]}
+                      </Badge>
+                    ))}
+                    {speakerProfile.strongest.map((c) => (
+                      <Badge key={`s-${c}`} className="bg-success text-success-foreground">
+                        Strength: {CRITERION_LABELS[c]}
+                      </Badge>
+                    ))}
+                  </div>
+                  {speakerProfile.lowScoringTopics.length > 0 && (
+                    <div>
+                      <p className="text-sm font-medium mb-2">Topics to practice</p>
+                      <ul className="text-sm text-muted-foreground space-y-1">
+                        {speakerProfile.lowScoringTopics.map((t) => (
+                          <li key={t}>• {t}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Past Debates Vault */}
             <Card>
               <CardHeader>
-                <CardTitle>Recent Sessions</CardTitle>
-                <CardDescription>Your recent debate practice sessions</CardDescription>
+                <CardTitle className="flex items-center gap-2">
+                  <BookOpen className="w-5 h-5" />
+                  Past Debates Vault
+                </CardTitle>
+                <CardDescription>
+                  Reopen scores, feedback, and recordings from previous speeches
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 {sessions.length === 0 ? (
-                  <p className="text-center text-muted-foreground py-8">No sessions yet. Start practicing to see your history here!</p>
+                  <p className="text-center text-muted-foreground py-8">
+                    No sessions yet. Start practicing on the home page to build your vault.
+                  </p>
                 ) : (
                   <div className="space-y-4">
-                    {sessions.slice(0, 10).map((session) => {
-                      const feedback = session.feedback || {};
-                      const enhancedFeedback = feedback.enhancedFeedback || {};
+                    {sessions.map((session) => {
+                      const length =
+                        session.feedback_length_minutes ||
+                        session.feedback?.feedbackLengthMinutes ||
+                        10;
+                      const points = 10;
                       return (
                         <Card key={session.id} className="border-l-4 border-l-primary">
                           <CardContent className="p-4">
                             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                               <div className="flex-1 min-w-0">
-                                <h3 className="font-semibold text-lg mb-1 break-words">{session.motion_topic}</h3>
+                                <h3 className="font-semibold text-lg mb-1 break-words">
+                                  {session.motion_topic}
+                                </h3>
                                 <div className="flex flex-wrap gap-2 text-sm text-muted-foreground mb-2">
                                   {session.stance && (
                                     <Badge variant="outline">{session.stance}</Badge>
                                   )}
+                                  <Badge variant="secondary">{length} min feedback</Badge>
+                                  <Badge variant="outline">+{points} pts</Badge>
                                   <span>{new Date(session.created_at).toLocaleDateString()}</span>
                                   <span>•</span>
-                                  <span>{session.duration}s</span>
+                                  <span>{session.duration}s speech</span>
+                                  {session.audio_url && (
+                                    <Badge className="bg-primary/15 text-primary border-0">
+                                      Recording
+                                    </Badge>
+                                  )}
                                 </div>
                                 {session.overall_score !== null && (
-                                  <div className="flex gap-4 text-sm mt-2">
-                                    <span>Score: <strong>{session.overall_score}%</strong></span>
-                                    {session.score_logic !== null && (
-                                      <span>Logic: <strong>{session.score_logic}</strong></span>
+                                  <div className="flex flex-wrap gap-3 text-sm mt-2">
+                                    <span>
+                                      Score: <strong>{session.overall_score}</strong>
+                                    </span>
+                                    {session.score_logic != null && (
+                                      <span>
+                                        Logic: <strong>{session.score_logic}</strong>
+                                      </span>
                                     )}
-                                    {session.score_rhetoric !== null && (
-                                      <span>Rhetoric: <strong>{session.score_rhetoric}</strong></span>
+                                    {session.score_rhetoric != null && (
+                                      <span>
+                                        Rhetoric: <strong>{session.score_rhetoric}</strong>
+                                      </span>
                                     )}
                                   </div>
                                 )}
                               </div>
-                              {session.overall_score !== null && (
-                                <div className="text-right">
-                                  <div className="text-2xl font-bold text-primary">{session.overall_score}%</div>
-                                </div>
-                              )}
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setSelectedSession(session)}
+                              >
+                                Open feedback
+                              </Button>
                             </div>
                             {session.transcript && (
                               <div className="mt-3 pt-3 border-t">
                                 <p className="text-sm text-muted-foreground line-clamp-2">
-                                  {session.transcript.substring(0, 150)}...
-                                </p>
-                              </div>
-                            )}
-                            {enhancedFeedback.argumentAnalysis && (
-                              <div className="mt-3 pt-3 border-t">
-                                <p className="text-xs text-muted-foreground">
-                                  Analysis available • {enhancedFeedback.counterArguments?.length || 0} counter arguments
+                                  {session.transcript.substring(0, 150)}
+                                  {session.transcript.length > 150 ? "…" : ""}
                                 </p>
                               </div>
                             )}
@@ -587,6 +705,60 @@ const Progress = () => {
                 )}
               </CardContent>
             </Card>
+
+            <Dialog
+              open={!!selectedSession}
+              onOpenChange={(open) => !open && setSelectedSession(null)}
+            >
+              <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Session feedback</DialogTitle>
+                </DialogHeader>
+                {selectedSession && (
+                  <ScoreDisplay
+                    motion={{
+                      topic: selectedSession.motion_topic,
+                      category: "Practice",
+                    }}
+                    stance={selectedSession.stance || undefined}
+                    score={{
+                      logic: selectedSession.score_logic ?? 0,
+                      rhetoric: selectedSession.score_rhetoric ?? 0,
+                      empathy: selectedSession.score_empathy ?? 0,
+                      delivery: selectedSession.score_delivery ?? 0,
+                      total: selectedSession.overall_score ?? 0,
+                    }}
+                    feedback={
+                      selectedSession.feedback?.feedback || {
+                        overall: "Saved session feedback.",
+                      }
+                    }
+                    transcript={selectedSession.transcript || ""}
+                    missingPoints={selectedSession.feedback?.missingPoints || []}
+                    enhancedArgument={
+                      selectedSession.feedback?.enhancedArgument || ""
+                    }
+                    enhancedFeedback={
+                      selectedSession.feedback?.enhancedFeedback || undefined
+                    }
+                    selectedCriteria={
+                      (selectedSession.selected_criteria ||
+                        selectedSession.feedback?.selectedCriteria ||
+                        ALL_CRITERIA) as AssessmentCriterion[]
+                    }
+                    feedbackLengthMinutes={
+                      (selectedSession.feedback_length_minutes ||
+                        selectedSession.feedback?.feedbackLengthMinutes ||
+                        10) as FeedbackLengthMinutes
+                    }
+                    audioUrl={selectedSession.audio_url}
+                    hideActions
+                    onTryAgain={() => setSelectedSession(null)}
+                    onNewTopic={() => setSelectedSession(null)}
+                  />
+                )}
+              </DialogContent>
+            </Dialog>
           </TabsContent>
 
           <TabsContent value="stats" className="space-y-6">

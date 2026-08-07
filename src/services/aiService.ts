@@ -1,3 +1,14 @@
+import {
+  ALL_CRITERIA,
+  CRITERION_MAX,
+  normalizeCriterionFeedback,
+  totalScoreForCriteria,
+  type AssessmentCriterion,
+  type CriterionFeedback,
+  type FeedbackLengthMinutes,
+  type StructuredFeedback,
+} from "@/types/feedback";
+
 interface CounterArgument {
   rebuttal: string;
   strengthLevel: 'Low' | 'Medium' | 'High';
@@ -36,7 +47,7 @@ interface EnhancedFeedback {
   strategicRecommendations: string[];
 }
 
-interface ScoreResult {
+export interface ScoreResult {
   score: {
     logic: number;
     rhetoric: number;
@@ -44,17 +55,13 @@ interface ScoreResult {
     delivery: number;
     total: number;
   };
-  feedback: {
-    logic: string;
-    rhetoric: string;
-    empathy: string;
-    delivery: string;
-    overall: string;
-  };
+  feedback: StructuredFeedback;
   missingPoints: string[];
   enhancedArgument: string;
   enhancedFeedback: EnhancedFeedback;
   transcript: string;
+  selectedCriteria?: AssessmentCriterion[];
+  feedbackLengthMinutes?: FeedbackLengthMinutes;
 }
 
 interface SpeechAnalysisRequest {
@@ -62,6 +69,35 @@ interface SpeechAnalysisRequest {
   topic: string;
   stance?: string;
   duration: number;
+  feedbackLengthMinutes?: FeedbackLengthMinutes;
+  selectedCriteria?: AssessmentCriterion[];
+  speakerProfileContext?: string;
+}
+
+function toCriterionFeedback(raw: unknown, fallback = "No feedback provided."): CriterionFeedback {
+  if (Array.isArray(raw)) {
+    const points = raw
+      .filter((p): p is string => typeof p === "string" && p.trim().length > 0)
+      .map((p) => p.trim())
+      .slice(0, 5);
+    if (points.length === 0) return { synopsis: fallback, points: [fallback] };
+    return {
+      synopsis: points[0].length > 180 ? `${points[0].slice(0, 177)}…` : points[0],
+      points,
+    };
+  }
+  const normalized = normalizeCriterionFeedback(raw);
+  if (normalized) {
+    return {
+      synopsis: normalized.synopsis || fallback,
+      points: (normalized.points.length ? normalized.points : [normalized.synopsis || fallback]).slice(0, 5),
+    };
+  }
+  if (typeof raw === "string" && raw.trim()) {
+    const text = raw.trim();
+    return { synopsis: text.slice(0, 180), points: [text].slice(0, 5) };
+  }
+  return { synopsis: fallback, points: [fallback] };
 }
 
 interface ApiKeyCandidate {
@@ -173,6 +209,10 @@ IMPORTANT:
     const prompt = this.buildAnalysisPrompt(request);
     const stance = request.stance || 'neutral';
     const stanceDisplay = stance === 'neutral' ? 'NEUTRAL' : stance.toUpperCase();
+    const selectedCriteria = (request.selectedCriteria?.length
+      ? request.selectedCriteria
+      : ALL_CRITERIA) as AssessmentCriterion[];
+    const feedbackLength = (request.feedbackLengthMinutes ?? 10) as FeedbackLengthMinutes;
 
     try {
       const apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent";
@@ -185,105 +225,42 @@ IMPORTANT:
 
 CRITICAL CONTEXT:
 - STUDENT'S CHOSEN POSITION: ${stanceDisplay}
+- FEEDBACK READING TIME: ${feedbackLength} minutes (scale depth accordingly)
+- ASSESS ONLY THESE CRITERIA: ${selectedCriteria.join(", ")}
 - Your role is to help strengthen arguments through LOGICAL REASONING, not unsourced data
-- Focus on argument structure, logical validity, and reasoning frameworks
 - NEVER provide unsourced statistics or facts - guide students to research and cite properly
 - Adapt your coaching to strengthen their ${stanceDisplay} position
 
-CORE PRINCIPLES:
+PERSONALIZATION RULES (MANDATORY):
+1. Only score and write feedback for: ${selectedCriteria.join(", ")}.
+2. For each selected criterion return:
+   { "synopsis": "1-2 short sentences", "points": ["bullet1", "bullet2"] }
+   - Maximum 5 points. Each point is ONE short actionable bullet — not a wall of text.
+   - Do NOT dump ALL-CAPS section labels into one paragraph.
+3. Feedback length tiers:
+   - 5 min: synopsis + up to 3 short points; skip or heavily trim enhanced_argument / long counters.
+   - 10 min: synopsis + up to 5 points; moderate missing_points (≤3).
+   - 15 min: synopsis + up to 5 detailed points; fuller enhanced_feedback and counters.
+4. Unselected criteria: set score to 0 and omit feedback (or empty object).
 
-1. LOGICAL ANALYSIS ONLY
-   - Focus on the structure and validity of arguments
-   - Identify logical fallacies and reasoning errors
-   - Suggest improvements to argument coherence and flow
-   - Never provide unsourced factual claims, statistics, or data
-   - If you reference a fact, you MUST cite a specific, verifiable source
-
-2. REASONING FRAMEWORKS TO APPLY
-   - Deductive reasoning: Help construct valid syllogisms
-   - Inductive reasoning: Strengthen generalizations and pattern recognition
-   - Analogical reasoning: Improve comparative arguments
-   - Causal reasoning: Clarify cause-effect relationships
-   - Reductio ad absurdum: Test arguments by examining their logical extremes
-
-3. WHAT TO ANALYZE
-   - Premise quality: Are the starting assumptions clear and reasonable?
-   - Logical structure: Do conclusions follow from premises?
-   - Internal consistency: Are there contradictions within the argument?
-   - Assumption identification: What unstated assumptions exist?
-   - Counterargument vulnerability: Where is the argument weakest logically?
-   - Burden of proof: Is it properly allocated and met?
-
-4. LOGICAL FALLACIES TO IDENTIFY
-   - Ad hominem attacks
-   - Straw man arguments
-   - False dichotomies
-   - Slippery slope reasoning
-   - Circular reasoning
-   - Appeals to authority/emotion/popularity
-   - Hasty generalizations
-   - Post hoc ergo propter hoc
-   - Equivocation and ambiguity
-
-5. POSITION-ADAPTIVE COACHING
-   - The student has chosen: ${stanceDisplay}
-   - Tailor your logical guidance to strengthen THEIR chosen position
-   - Help them anticipate and counter opposing arguments
-   - For NEUTRAL: Help them identify logical merits and flaws on both sides
-   - Always produce counterarguments and defense strategies, even in NEUTRAL mode, so the speaker can anticipate and respond to both FOR and AGAINST perspectives
-
-6. WHAT TO AVOID
-   - DO NOT say: "Studies show..." without a cited source
-   - DO NOT provide statistics unless you can cite the exact source
-   - DO NOT make factual claims about events, policies, or data
-   - DO NOT argue against the student's chosen position
-   - DO NOT let personal views on the topic influence your logical analysis
-
-7. SOURCING REQUIREMENT
-   If you need to reference a fact to illustrate a logical point:
-   - State: "According to [specific source], [fact]" OR
-   - Say: "If we assume [fact] is true (which you should verify), then logically..."
-   - Make clear when you're using a hypothetical vs. a verified fact
-
-	You MUST provide SPECIFIC, ACTIONABLE feedback with EXACT word-for-word examples focusing on logical reasoning.
-	You MUST generate exactly 3 counterarguments and exactly 3 defense strategies for the chosen stance (and for NEUTRAL, cover both FOR and AGAINST perspectives within those 3 items).
-	NO vague feedback allowed. NO unsourced statistics.
-
-OUTPUT FORMAT - CRITICAL INSTRUCTIONS:
-You MUST provide your analysis in a structured format. You can return it as:
-1. A JSON object (preferred but optional)
-2. Structured text with clear sections and labels
-
-If using JSON, format it like this:
+OUTPUT FORMAT - Prefer JSON:
 {
-  "logic_score": <0-10>,
-  "logic_feedback": ["feedback1", "feedback2", ...],
-  "rhetoric_score": <0-10>,
-  "rhetoric_feedback": ["feedback1", "feedback2", ...],
-  "empathy_score": <0-5>,
-  "empathy_feedback": ["feedback1", "feedback2", ...],
-  "delivery_score": <0-5>,
-  "delivery_feedback": ["feedback1", "feedback2", ...],
-  "missing_points": ["point1", "point2", ...],
-  "enhanced_argument": "full text here",
-  "enhanced_feedback": {...}
+  "logic_score": <0-10 or 0 if not selected>,
+  "logic_feedback": { "synopsis": "...", "points": ["...", "..."] },
+  "rhetoric_score": <0-10 or 0 if not selected>,
+  "rhetoric_feedback": { "synopsis": "...", "points": ["..."] },
+  "empathy_score": <0-5 or 0 if not selected>,
+  "empathy_feedback": { "synopsis": "...", "points": ["..."] },
+  "delivery_score": <0-5 or 0 if not selected>,
+  "delivery_feedback": { "synopsis": "...", "points": ["..."] },
+  "missing_points": ["point1"],
+  "enhanced_argument": "text (brief for 5-min tier)",
+  "enhanced_feedback": {}
 }
 
-If using structured text, format it clearly with labels like:
-LOGIC SCORE: <number>
-LOGIC FEEDBACK:
-- <feedback point 1>
-- <feedback point 2>
-...
-
-RHETORIC SCORE: <number>
-RHETORIC FEEDBACK:
-- <feedback point 1>
-...
-
-And so on for all categories.
-
-IMPORTANT: Always provide scores (0-10 for logic/rhetoric, 0-5 for empathy/delivery) and detailed feedback for each category.
+You MUST provide SPECIFIC, ACTIONABLE feedback. NO vague feedback. NO unsourced statistics.
+${feedbackLength === 5 ? "Keep the entire response concise — student only budgeted ~5 minutes of reading." : ""}
+${feedbackLength >= 10 ? "Include up to 3 counterarguments and 3 defense strategies when useful." : "Skip long counterargument/defense sections for this short feedback tier."}
 
 ${prompt}`
               }
@@ -465,8 +442,8 @@ ${prompt}`
         console.log('✅ MISSING POINTS:', parsedResult.missingPoints);
         console.log('✅ COUNTER ARGUMENTS count:', parsedResult.enhancedFeedback?.counterArguments?.length || 0);
         console.log('✅ DEFENSE STRATEGIES count:', parsedResult.enhancedFeedback?.defenseStrategies?.length || 0);
-        
-        return parsedResult;
+
+        return this.applyPersonalizationFilters(parsedResult, request);
       }
 
       console.warn('All Gemini API keys failed; returning friendly fallback message.', lastError);
@@ -487,6 +464,78 @@ ${prompt}`
       }
       throw new Error('AI analysis failed due to an unknown error. Please try again.');
     }
+  }
+
+  private applyPersonalizationFilters(
+    result: ScoreResult,
+    request: SpeechAnalysisRequest,
+  ): ScoreResult {
+    const selected = (request.selectedCriteria?.length
+      ? request.selectedCriteria
+      : ALL_CRITERIA) as AssessmentCriterion[];
+    const feedbackLength = (request.feedbackLengthMinutes ?? 10) as FeedbackLengthMinutes;
+    const maxPoints = feedbackLength === 5 ? 3 : 5;
+
+    const score = {
+      logic: selected.includes("logic") ? result.score.logic : 0,
+      rhetoric: selected.includes("rhetoric") ? result.score.rhetoric : 0,
+      empathy: selected.includes("empathy") ? result.score.empathy : 0,
+      delivery: selected.includes("delivery") ? result.score.delivery : 0,
+      total: 0,
+    };
+    score.total = totalScoreForCriteria(score, selected);
+
+    const trimFb = (fb: CriterionFeedback | undefined): CriterionFeedback | undefined => {
+      if (!fb) return undefined;
+      return {
+        synopsis: fb.synopsis,
+        points: (fb.points || []).slice(0, maxPoints),
+      };
+    };
+
+    const feedback: StructuredFeedback = {
+      overall: `Your speech scored ${score.total}/${selected.reduce((s, c) => s + CRITERION_MAX[c], 0)}. Focus on your selected criteria: ${selected.join(", ")}.`,
+    };
+    if (selected.includes("logic")) feedback.logic = trimFb(result.feedback.logic) ?? toCriterionFeedback(null);
+    if (selected.includes("rhetoric")) feedback.rhetoric = trimFb(result.feedback.rhetoric) ?? toCriterionFeedback(null);
+    if (selected.includes("empathy")) feedback.empathy = trimFb(result.feedback.empathy) ?? toCriterionFeedback(null);
+    if (selected.includes("delivery")) feedback.delivery = trimFb(result.feedback.delivery) ?? toCriterionFeedback(null);
+
+    let missingPoints = result.missingPoints || [];
+    let enhancedArgument = result.enhancedArgument;
+    let enhancedFeedback = result.enhancedFeedback;
+
+    if (feedbackLength === 5) {
+      missingPoints = missingPoints.slice(0, 2);
+      if (enhancedArgument && enhancedArgument.length > 600) {
+        enhancedArgument = `${enhancedArgument.slice(0, 597)}…`;
+      }
+      enhancedFeedback = {
+        ...enhancedFeedback,
+        counterArguments: (enhancedFeedback.counterArguments || []).slice(0, 1),
+        defenseStrategies: (enhancedFeedback.defenseStrategies || []).slice(0, 1),
+        strategicRecommendations: (enhancedFeedback.strategicRecommendations || []).slice(0, 2),
+      };
+    } else if (feedbackLength === 10) {
+      missingPoints = missingPoints.slice(0, 3);
+      enhancedFeedback = {
+        ...enhancedFeedback,
+        counterArguments: (enhancedFeedback.counterArguments || []).slice(0, 2),
+        defenseStrategies: (enhancedFeedback.defenseStrategies || []).slice(0, 2),
+        strategicRecommendations: (enhancedFeedback.strategicRecommendations || []).slice(0, 4),
+      };
+    }
+
+    return {
+      ...result,
+      score,
+      feedback,
+      missingPoints,
+      enhancedArgument,
+      enhancedFeedback,
+      selectedCriteria: selected,
+      feedbackLengthMinutes: feedbackLength,
+    };
   }
 
   private isLikelyTruncated(text: string | null | undefined): boolean {
@@ -518,7 +567,14 @@ ${prompt}`
   private needsTruncationRepair(result: ScoreResult): boolean {
     const analysis = result.enhancedFeedback?.argumentAnalysis;
     const categoryFeedback = result.feedback
-      ? [result.feedback.logic, result.feedback.rhetoric, result.feedback.empathy, result.feedback.delivery].join("\n")
+      ? [result.feedback.logic, result.feedback.rhetoric, result.feedback.empathy, result.feedback.delivery]
+          .filter(Boolean)
+          .map((fb) =>
+            typeof fb === "string"
+              ? fb
+              : `${(fb as CriterionFeedback).synopsis}\n${((fb as CriterionFeedback).points || []).join("\n")}`,
+          )
+          .join("\n")
       : "";
     const missing = Array.isArray(result.missingPoints) ? result.missingPoints.join("\n") : "";
 
@@ -614,17 +670,17 @@ OUTPUT RULES:
         : current.enhancedArgument,
       feedback: {
         ...current.feedback,
-        logic: typeof repaired.logic_feedback === "string" && repaired.logic_feedback.trim().length > 0
-          ? repaired.logic_feedback.trim()
+        logic: repaired.logic_feedback != null
+          ? toCriterionFeedback(repaired.logic_feedback, current.feedback.logic?.synopsis || "No logic feedback provided.")
           : current.feedback.logic,
-        rhetoric: typeof repaired.rhetoric_feedback === "string" && repaired.rhetoric_feedback.trim().length > 0
-          ? repaired.rhetoric_feedback.trim()
+        rhetoric: repaired.rhetoric_feedback != null
+          ? toCriterionFeedback(repaired.rhetoric_feedback, current.feedback.rhetoric?.synopsis || "No rhetoric feedback provided.")
           : current.feedback.rhetoric,
-        empathy: typeof repaired.empathy_feedback === "string" && repaired.empathy_feedback.trim().length > 0
-          ? repaired.empathy_feedback.trim()
+        empathy: repaired.empathy_feedback != null
+          ? toCriterionFeedback(repaired.empathy_feedback, current.feedback.empathy?.synopsis || "No empathy feedback provided.")
           : current.feedback.empathy,
-        delivery: typeof repaired.delivery_feedback === "string" && repaired.delivery_feedback.trim().length > 0
-          ? repaired.delivery_feedback.trim()
+        delivery: repaired.delivery_feedback != null
+          ? toCriterionFeedback(repaired.delivery_feedback, current.feedback.delivery?.synopsis || "No delivery feedback provided.")
           : current.feedback.delivery,
       },
       missingPoints: Array.isArray(repaired.missing_points) && repaired.missing_points.filter((x: any) => typeof x === "string" && x.trim().length > 0).length > 0
@@ -857,11 +913,32 @@ OUTPUT RULES:
   }
 
   private buildAnalysisPrompt(request: SpeechAnalysisRequest): string {
+    const selectedCriteria = (request.selectedCriteria?.length
+      ? request.selectedCriteria
+      : ALL_CRITERIA) as AssessmentCriterion[];
+    const feedbackLength = (request.feedbackLengthMinutes ?? 10) as FeedbackLengthMinutes;
+    const maxPoints = feedbackLength === 5 ? 3 : 5;
+
     const stanceContext = request.stance 
       ? `\n\n⚠️ CRITICAL: The speaker is arguing ${request.stance.toUpperCase()} this motion. You MUST evaluate whether their arguments effectively support their chosen stance. If they argue ${request.stance === 'for' ? 'AGAINST' : 'FOR'} when they should argue ${request.stance.toUpperCase()}, this is a MAJOR flaw. Their logic, evidence, and rhetoric must align with arguing ${request.stance.toUpperCase()}.`
       : '\n\nNOTE: This is a neutral opinion piece (no specific stance required).';
+
+    const personalizationBlock = `
+=== PERSONALIZED FEEDBACK SETTINGS ===
+SPEECH DURATION: ${request.duration} seconds
+FEEDBACK READING BUDGET: ${feedbackLength} minutes
+SELECTED CRITERIA ONLY: ${selectedCriteria.join(", ")}
+For EACH selected criterion return:
+  "<criterion>_feedback": { "synopsis": "1-2 sentences", "points": ["short bullet", ...] }
+Rules:
+- At most ${maxPoints} points per criterion
+- Points must be separate bullets, not one dense paragraph
+- Do not invent ALL-CAPS section headers inside a single string
+- Do not score unselected criteria (use 0)
+${request.speakerProfileContext ? `\n${request.speakerProfileContext}\n` : ""}
+`;
     
-    return `You are an EXPERT DEBATE COACH, ARGUMENT STRATEGIST, and COMPETITIVE DEBATE JUDGE with 20+ years of experience. You have trained world championship debaters. Analyze this debate speech with MILITARY PRECISION and provide BRUTALLY HONEST, SPECIFIC, ACTIONABLE feedback.
+    return `${personalizationBlock}You are an EXPERT DEBATE COACH, ARGUMENT STRATEGIST, and COMPETITIVE DEBATE JUDGE with 20+ years of experience. You have trained world championship debaters. Analyze this debate speech with MILITARY PRECISION and provide BRUTALLY HONEST, SPECIFIC, ACTIONABLE feedback.
 
 You are a debate coach for Schoolhouse dialogue portfolios. Your role is to help students develop strong logical arguments for their chosen position (FOR, AGAINST, or NEUTRAL) on debate topics. You focus on logical reasoning, argument structure, and critical thinking - NOT on providing unsourced facts or data.
 
@@ -2656,10 +2733,10 @@ DO NOT wrap the JSON in markdown code blocks. Return the raw JSON object only.
         total: scores.slice(0, 4).reduce((a, b) => a + b, 0)
       },
       feedback: {
-        logic: this.extractRelevantSection(analysis, 'logic') || 'Analysis provided in full response below.',
-        rhetoric: this.extractRelevantSection(analysis, 'rhetoric') || 'Analysis provided in full response below.',
-        empathy: this.extractRelevantSection(analysis, 'empathy') || 'Analysis provided in full response below.',
-        delivery: this.extractRelevantSection(analysis, 'delivery') || 'Analysis provided in full response below.',
+        logic: toCriterionFeedback(this.extractRelevantSection(analysis, 'logic') || 'Analysis provided in full response below.'),
+        rhetoric: toCriterionFeedback(this.extractRelevantSection(analysis, 'rhetoric') || 'Analysis provided in full response below.'),
+        empathy: toCriterionFeedback(this.extractRelevantSection(analysis, 'empathy') || 'Analysis provided in full response below.'),
+        delivery: toCriterionFeedback(this.extractRelevantSection(analysis, 'delivery') || 'Analysis provided in full response below.'),
         overall: `Your speech has been analyzed. ${fullText.substring(0, 200)}...`
       },
       missingPoints: ["Review logical structure", "Add specific examples", "Strengthen premises"],
@@ -2814,20 +2891,27 @@ DO NOT wrap the JSON in markdown code blocks. Return the raw JSON object only.
       }
     })();
 
+    const logicFb = toCriterionFeedback(parsed.logic_feedback, "No logic feedback provided.");
+    const rhetoricFb = toCriterionFeedback(parsed.rhetoric_feedback, "No rhetoric feedback provided.");
+    const empathyFb = toCriterionFeedback(parsed.empathy_feedback, "No empathy feedback provided.");
+    const deliveryFb = toCriterionFeedback(parsed.delivery_feedback, "No delivery feedback provided.");
+
+    const score = {
+      logic: logicScore,
+      rhetoric: rhetoricScore,
+      empathy: empathyScore,
+      delivery: deliveryScore,
+      total: totalScore,
+    };
+
     const result: ScoreResult = {
-      score: {
-        logic: logicScore,
-        rhetoric: rhetoricScore,
-        empathy: empathyScore,
-        delivery: deliveryScore,
-        total: totalScore
-      },
+      score,
       feedback: {
-        logic: Array.isArray(parsed.logic_feedback) ? parsed.logic_feedback.join(' ') : (typeof parsed.logic_feedback === 'string' ? parsed.logic_feedback : 'No logic feedback provided.'),
-        rhetoric: Array.isArray(parsed.rhetoric_feedback) ? parsed.rhetoric_feedback.join(' ') : (typeof parsed.rhetoric_feedback === 'string' ? parsed.rhetoric_feedback : 'No rhetoric feedback provided.'),
-        empathy: Array.isArray(parsed.empathy_feedback) ? parsed.empathy_feedback.join(' ') : (typeof parsed.empathy_feedback === 'string' ? parsed.empathy_feedback : 'No empathy feedback provided.'),
-        delivery: Array.isArray(parsed.delivery_feedback) ? parsed.delivery_feedback.join(' ') : (typeof parsed.delivery_feedback === 'string' ? parsed.delivery_feedback : 'No delivery feedback provided.'),
-        overall: `Your speech scored ${totalScore}/30. Focus on improving areas with lower scores for better performance.`
+        logic: logicFb,
+        rhetoric: rhetoricFb,
+        empathy: empathyFb,
+        delivery: deliveryFb,
+        overall: `Your speech scored ${totalScore}/30. Focus on improving areas with lower scores for better performance.`,
       },
       missingPoints: parsed.missing_points || [],
       enhancedArgument: (() => {

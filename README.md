@@ -38,6 +38,14 @@ This project is built with:
 - `npm run preview` - Preview the production build
 - `npm run lint` - Run ESLint
 
+## Analytics (GA4)
+
+Google Analytics 4 is installed site-wide and tracks pageviews for every React Router route change (SPA-safe).
+
+- Default Measurement ID: `G-7TYF234V14`
+- Optional override: set `VITE_GA_MEASUREMENT_ID` (e.g. in `.env.local`)
+- Note: analytics events only send in production builds (`npm run build` / `npm run preview`)
+
 ## Project Structure
 
 - `/src` - Source code

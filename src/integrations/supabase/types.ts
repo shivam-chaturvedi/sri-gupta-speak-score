@@ -63,6 +63,9 @@ export type Database = {
           stance: string | null
           transcript: string | null
           user_id: string
+          audio_url: string | null
+          feedback_length_minutes: number | null
+          selected_criteria: string[] | null
         }
         Insert: {
           created_at?: string
@@ -79,6 +82,9 @@ export type Database = {
           stance?: string | null
           transcript?: string | null
           user_id: string
+          audio_url?: string | null
+          feedback_length_minutes?: number | null
+          selected_criteria?: string[] | null
         }
         Update: {
           created_at?: string
@@ -95,6 +101,9 @@ export type Database = {
           stance?: string | null
           transcript?: string | null
           user_id?: string
+          audio_url?: string | null
+          feedback_length_minutes?: number | null
+          selected_criteria?: string[] | null
         }
         Relationships: []
       }

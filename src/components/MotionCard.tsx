@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from "react";
-import { Clock, Play, Mic, RotateCcw, LogIn } from "lucide-react";
+import { Clock, Mic, LogIn, BookOpen } from "lucide-react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +15,12 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Link } from "react-router-dom";
+import {
+  ALL_CRITERIA,
+  CRITERION_LABELS,
+  type AssessmentCriterion,
+  type FeedbackLengthMinutes,
+} from "@/types/feedback";
 
 interface Motion {
   id: string;
@@ -24,51 +30,69 @@ interface Motion {
   type: "opinion" | "stance";
 }
 
+export type SpeechStartOptions = {
+  feedbackLengthMinutes: FeedbackLengthMinutes;
+  selectedCriteria: AssessmentCriterion[];
+};
+
 interface MotionCardProps {
   motion: Motion;
-  onStartSpeech: (motion: Motion, duration: number, stance?: string) => void;
+  onStartSpeech: (
+    motion: Motion,
+    duration: number,
+    stance: string | undefined,
+    options: SpeechStartOptions,
+  ) => void;
   isLoggedIn?: boolean;
 }
 
 export function MotionCard({ motion, onStartSpeech, isLoggedIn = false }: MotionCardProps) {
   const [selectedStance, setSelectedStance] = useState<string>("");
   const [selectedDuration, setSelectedDuration] = useState<number>(60);
+  const [feedbackLength, setFeedbackLength] = useState<FeedbackLengthMinutes>(10);
+  const [selectedCriteria, setSelectedCriteria] = useState<Set<AssessmentCriterion>>(
+    () => new Set(ALL_CRITERIA),
+  );
 
-  // Reset stance when motion changes to prevent state from persisting incorrectly
   useEffect(() => {
-    // Reset stance when motion ID changes (new motion selected)
     setSelectedStance("");
-  }, [motion.id]); // Reset when motion ID changes
-
-  // All motions now support For/Against/Neutral positions
-  const isStanceMotion = useMemo(() => {
-    return true; // All topics support stance selection
-  }, [motion?.id]);
+  }, [motion.id]);
 
   const getCategoryColor = (category: string) => {
     const colors = {
       Politics: "bg-destructive",
-      Ethics: "bg-success", 
+      Ethics: "bg-success",
       Education: "bg-primary",
       Technology: "bg-accent",
       Abstract: "bg-speech-accent",
-      "Pop Culture": "bg-warning"
+      "Pop Culture": "bg-warning",
     };
     return colors[category as keyof typeof colors] || "bg-muted";
   };
 
-  const handleStart = () => {
-    if (!isLoggedIn) {
-      return; // Don't proceed if not logged in
-    }
-    onStartSpeech(
-      motion, 
-      selectedDuration, 
-      selectedStance // Always pass stance since all topics support it
-    );
+  const toggleCriterion = (id: AssessmentCriterion) => {
+    setSelectedCriteria((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        if (next.size <= 1) return prev;
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
   };
 
-  // Early return if motion is invalid
+  const canStart = Boolean(selectedStance) && selectedCriteria.size > 0;
+
+  const handleStart = () => {
+    if (!isLoggedIn || !canStart) return;
+    onStartSpeech(motion, selectedDuration, selectedStance, {
+      feedbackLengthMinutes: feedbackLength,
+      selectedCriteria: Array.from(selectedCriteria),
+    });
+  };
+
   if (!motion || !motion.id) {
     return null;
   }
@@ -88,9 +112,7 @@ export function MotionCard({ motion, onStartSpeech, isLoggedIn = false }: Motion
           {motion.topic}
         </CardTitle>
         {motion.description && (
-          <p className="text-sm text-muted-foreground mt-2">
-            {motion.description}
-          </p>
+          <p className="text-sm text-muted-foreground mt-2">{motion.description}</p>
         )}
       </CardHeader>
 
@@ -98,97 +120,102 @@ export function MotionCard({ motion, onStartSpeech, isLoggedIn = false }: Motion
         <div className="space-y-2">
           <label className="text-sm font-medium text-foreground block">Choose your stance:</label>
           <div className="grid grid-cols-3 gap-2">
+            {(["for", "against", "neutral"] as const).map((stance) => (
               <Button
-                variant={selectedStance === "for" ? "default" : "outline"}
+                key={stance}
+                variant={selectedStance === stance ? "default" : "outline"}
                 size="sm"
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  setSelectedStance("for");
+                  setSelectedStance(stance);
                 }}
-                className="h-8"
+                className="h-8 capitalize"
                 type="button"
-                aria-label="Select For stance"
               >
-                For
+                {stance}
               </Button>
-              <Button
-                variant={selectedStance === "against" ? "default" : "outline"}
-                size="sm"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setSelectedStance("against");
-                }}
-                className="h-8"
-                type="button"
-                aria-label="Select Against stance"
-              >
-                Against
-              </Button>
-              <Button
-                variant={selectedStance === "neutral" ? "default" : "outline"}
-                size="sm"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setSelectedStance("neutral");
-                }}
-                className="h-8"
-                type="button"
-                aria-label="Select Neutral stance"
-              >
-                Neutral
-              </Button>
-            </div>
+            ))}
           </div>
+        </div>
 
         <div className="space-y-2">
           <label className="text-sm font-medium text-foreground">Speech duration:</label>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-            <Button
-              variant={selectedDuration === 60 ? "default" : "outline"}
-              size="sm"
-              onClick={() => setSelectedDuration(60)}
-              className="h-8"
-            >
-              <Clock className="w-3 h-3 mr-1" />
-              60s
-            </Button>
-            <Button
-              variant={selectedDuration === 90 ? "default" : "outline"}
-              size="sm"
-              onClick={() => setSelectedDuration(90)}
-              className="h-8"
-            >
-              <Clock className="w-3 h-3 mr-1" />
-              90s
-            </Button>
-            <Button
-              variant={selectedDuration === 120 ? "default" : "outline"}
-              size="sm"
-              onClick={() => setSelectedDuration(120)}
-              className="h-8"
-            >
-              <Clock className="w-3 h-3 mr-1" />
-              2 min
-            </Button>
-            <Button
-              variant={selectedDuration === 180 ? "default" : "outline"}
-              size="sm"
-              onClick={() => setSelectedDuration(180)}
-              className="h-8"
-            >
-              <Clock className="w-3 h-3 mr-1" />
-              3 min
-            </Button>
+            {[
+              { value: 60, label: "60s" },
+              { value: 90, label: "90s" },
+              { value: 120, label: "2 min" },
+              { value: 180, label: "3 min" },
+            ].map(({ value, label }) => (
+              <Button
+                key={value}
+                variant={selectedDuration === value ? "default" : "outline"}
+                size="sm"
+                onClick={() => setSelectedDuration(value)}
+                className="h-8"
+              >
+                <Clock className="w-3 h-3 mr-1" />
+                {label}
+              </Button>
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-sm font-medium text-foreground flex items-center gap-1.5">
+            <BookOpen className="w-3.5 h-3.5" />
+            Length of feedback
+          </label>
+          <p className="text-xs text-muted-foreground">
+            How long do you want to spend reading feedback after your speech?
+          </p>
+          <div className="grid grid-cols-3 gap-2">
+            {([5, 10, 15] as FeedbackLengthMinutes[]).map((mins) => (
+              <Button
+                key={mins}
+                variant={feedbackLength === mins ? "default" : "outline"}
+                size="sm"
+                onClick={() => setFeedbackLength(mins)}
+                className="h-8"
+                type="button"
+              >
+                {mins} min
+              </Button>
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-sm font-medium text-foreground">Assess criteria:</label>
+          <p className="text-xs text-muted-foreground">
+            Pick what to focus on today. Deeper detail on fewer criteria beats shallow coverage of everything.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {ALL_CRITERIA.map((id) => {
+              const active = selectedCriteria.has(id);
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => toggleCriterion(id)}
+                  className={`px-3 py-1.5 rounded-md text-xs font-medium border transition-all ${
+                    active
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-muted/40 text-muted-foreground border-border hover:bg-muted"
+                  }`}
+                >
+                  {CRITERION_LABELS[id]}
+                </button>
+              );
+            })}
           </div>
         </div>
 
         {isLoggedIn ? (
           <Button
             onClick={handleStart}
-            disabled={!selectedStance}
+            disabled={!canStart}
             className="w-full bg-gradient-primary hover:opacity-90 transition-opacity border-0 text-white font-semibold py-3 h-12"
           >
             <Mic className="w-4 h-4 mr-2" />
@@ -198,7 +225,7 @@ export function MotionCard({ motion, onStartSpeech, isLoggedIn = false }: Motion
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button
-                disabled={!selectedStance}
+                disabled={!canStart}
                 className="w-full bg-gradient-primary hover:opacity-90 transition-opacity border-0 text-white font-semibold py-3 h-12"
               >
                 <Mic className="w-4 h-4 mr-2" />
@@ -209,7 +236,8 @@ export function MotionCard({ motion, onStartSpeech, isLoggedIn = false }: Motion
               <AlertDialogHeader>
                 <AlertDialogTitle>Login Required</AlertDialogTitle>
                 <AlertDialogDescription>
-                  Please login first to start practicing. You need to be logged in to save your progress and track your achievements.
+                  Please login first to start practicing. You need to be logged in to save your
+                  progress and track your achievements.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>

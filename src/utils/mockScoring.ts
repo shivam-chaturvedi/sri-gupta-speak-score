@@ -1,3 +1,13 @@
+import {
+  ALL_CRITERIA,
+  CRITERION_MAX,
+  totalScoreForCriteria,
+  type AssessmentCriterion,
+  type CriterionFeedback,
+  type FeedbackLengthMinutes,
+  type StructuredFeedback,
+} from "@/types/feedback";
+
 interface Score {
   logic: number;
   rhetoric: number;
@@ -6,19 +16,12 @@ interface Score {
   total: number;
 }
 
-interface Feedback {
-  logic: string;
-  rhetoric: string;
-  empathy: string;
-  delivery: string;
-  overall: string;
-}
-
 interface CounterArgument {
   rebuttal: string;
-  strengthLevel: 'Low' | 'Medium' | 'High';
+  strengthLevel: "Low" | "Medium" | "High";
   supportingEvidence: string;
   commonSources: string;
+  keyPoints?: string[];
 }
 
 interface DefenseStrategy {
@@ -26,6 +29,7 @@ interface DefenseStrategy {
   directResponse: string;
   redirectTechnique: string;
   evidenceArsenal: string;
+  keyPoints?: string[];
 }
 
 interface EnhancedFeedback {
@@ -48,185 +52,175 @@ interface EnhancedFeedback {
 
 export interface ScoreData {
   score: Score;
-  feedback: Feedback;
+  feedback: StructuredFeedback;
   transcript: string;
   missingPoints: string[];
   enhancedArgument: string;
   enhancedFeedback?: EnhancedFeedback;
+  selectedCriteria?: AssessmentCriterion[];
+  feedbackLengthMinutes?: FeedbackLengthMinutes;
 }
 
-// Mock scoring system for MVP - will be replaced with AI scoring
-export function generateMockScore(audioBlob: Blob, motion: string, stance?: string, providedTranscript?: string): ScoreData {
-  // Simulate realistic scoring with some randomness
-  const baseLogic = Math.floor(Math.random() * 3) + 6; // 6-8
-  const baseRhetoric = Math.floor(Math.random() * 3) + 6; // 6-8  
-  const baseEmpathy = Math.floor(Math.random() * 2) + 3; // 3-4
-  const baseDelivery = Math.floor(Math.random() * 2) + 3; // 3-4
-  const total = baseLogic + baseRhetoric + baseEmpathy + baseDelivery;
+function asCriterion(text: string, extra?: string[]): CriterionFeedback {
+  return {
+    synopsis: text,
+    points: [text, ...(extra || [])].slice(0, 5),
+  };
+}
+
+export function generateMockScore(
+  audioBlob: Blob,
+  motion: string,
+  stance?: string,
+  providedTranscript?: string,
+  options?: {
+    feedbackLengthMinutes?: FeedbackLengthMinutes;
+    selectedCriteria?: AssessmentCriterion[];
+  },
+): ScoreData {
+  void audioBlob;
+  const selected = options?.selectedCriteria?.length
+    ? options.selectedCriteria
+    : ALL_CRITERIA;
+  const feedbackLength = options?.feedbackLengthMinutes ?? 10;
+
+  const baseLogic = Math.floor(Math.random() * 3) + 6;
+  const baseRhetoric = Math.floor(Math.random() * 3) + 6;
+  const baseEmpathy = Math.floor(Math.random() * 2) + 3;
+  const baseDelivery = Math.floor(Math.random() * 2) + 3;
 
   const score: Score = {
-    logic: baseLogic,
-    rhetoric: baseRhetoric,
-    empathy: baseEmpathy,
-    delivery: baseDelivery,
-    total: total
+    logic: selected.includes("logic") ? baseLogic : 0,
+    rhetoric: selected.includes("rhetoric") ? baseRhetoric : 0,
+    empathy: selected.includes("empathy") ? baseEmpathy : 0,
+    delivery: selected.includes("delivery") ? baseDelivery : 0,
+    total: 0,
   };
+  score.total = totalScoreForCriteria(score, selected);
 
-  const feedback: Feedback = {
-    logic: generateLogicFeedback(score.logic),
-    rhetoric: generateRhetoricFeedback(score.rhetoric),
-    empathy: generateEmpathyFeedback(score.empathy),
-    delivery: generateDeliveryFeedback(score.delivery),
-    overall: generateOverallFeedback(score, motion, stance)
+  const maxPoints = feedbackLength === 5 ? 3 : 5;
+  const feedback: StructuredFeedback = {
+    overall: `Your speech scored ${score.total}/${selected.reduce((s, c) => s + CRITERION_MAX[c], 0)}.`,
   };
+  if (selected.includes("logic")) {
+    feedback.logic = {
+      ...asCriterion(generateLogicFeedback(baseLogic), [
+        "Clarify your main premise before the first example.",
+        "Link each claim to a clear conclusion.",
+      ]),
+      points: asCriterion(generateLogicFeedback(baseLogic), [
+        "Clarify your main premise before the first example.",
+        "Link each claim to a clear conclusion.",
+      ]).points.slice(0, maxPoints),
+    };
+  }
+  if (selected.includes("rhetoric")) {
+    feedback.rhetoric = {
+      synopsis: generateRhetoricFeedback(baseRhetoric),
+      points: [
+        generateRhetoricFeedback(baseRhetoric),
+        "Add one vivid comparison to make the claim stick.",
+        "End with a sharper call-to-action phrase.",
+      ].slice(0, maxPoints),
+    };
+  }
+  if (selected.includes("empathy")) {
+    feedback.empathy = {
+      synopsis: generateEmpathyFeedback(baseEmpathy),
+      points: [
+        generateEmpathyFeedback(baseEmpathy),
+        "Acknowledge one opposing concern before rebutting it.",
+      ].slice(0, maxPoints),
+    };
+  }
+  if (selected.includes("delivery")) {
+    feedback.delivery = {
+      synopsis: generateDeliveryFeedback(baseDelivery),
+      points: [
+        generateDeliveryFeedback(baseDelivery),
+        "Slow down on key transitions so listeners can follow.",
+      ].slice(0, maxPoints),
+    };
+  }
 
-  // Use provided transcript or generate mock
   const transcript = providedTranscript || generateMockTranscript(motion, stance);
-  
-  // Generate missing points analysis
-  const missingPoints = generateMissingPoints(motion, stance);
-  
-  // Generate enhanced argument
+  const missingPoints = generateMissingPoints(motion, stance).slice(
+    0,
+    feedbackLength === 5 ? 2 : 4,
+  );
   const enhancedArgument = generateEnhancedArgument(motion, missingPoints, stance);
 
-  return { 
-    score, 
-    feedback, 
+  return {
+    score,
+    feedback,
     transcript,
     missingPoints,
-    enhancedArgument
+    enhancedArgument,
+    selectedCriteria: selected,
+    feedbackLengthMinutes: feedbackLength,
   };
 }
 
 function generateLogicFeedback(score: number): string {
   if (score >= 8) {
-    return "Excellent logical structure! Your argument flowed clearly from premise to conclusion with strong supporting points.";
-  } else if (score >= 6) {
-    return "Good logical foundation. Consider strengthening your main points with more specific examples or evidence.";
-  } else {
-    return "Work on organizing your thoughts more clearly. Try outlining your main points before speaking.";
+    return "Strong logical structure from premise to conclusion.";
   }
+  if (score >= 6) {
+    return "Solid foundation — tighten how evidence supports each claim.";
+  }
+  return "Organize main points more clearly before supporting details.";
 }
 
 function generateRhetoricFeedback(score: number): string {
   if (score >= 8) {
-    return "Strong rhetorical skills! You used persuasive language effectively and painted vivid pictures with your words.";
-  } else if (score >= 6) {
-    return "Good use of language. Try incorporating more rhetorical devices like metaphors or analogies to make your argument more compelling.";
-  } else {
-    return "Focus on using more persuasive language. Consider your word choice and how to make your argument more emotionally resonant.";
+    return "Persuasive language landed well.";
   }
+  if (score >= 6) {
+    return "Good wording — add one stronger rhetorical device.";
+  }
+  return "Choose sharper, more concrete language for key claims.";
 }
 
 function generateEmpathyFeedback(score: number): string {
   if (score >= 4) {
-    return "Great job acknowledging different perspectives! Your respectful tone strengthens your credibility.";
-  } else if (score >= 3) {
-    return "Good awareness of other viewpoints. Consider acknowledging counterarguments more explicitly.";
-  } else {
-    return "Try to show more understanding of opposing views. This makes your argument stronger and more persuasive.";
+    return "You respected opposing views while defending your stance.";
   }
+  if (score >= 3) {
+    return "Add a brief acknowledgment of the other side.";
+  }
+  return "Show you understand why someone might disagree.";
 }
 
 function generateDeliveryFeedback(score: number): string {
   if (score >= 4) {
-    return "Confident delivery! Your pace and tone kept the audience engaged throughout your speech.";
-  } else if (score >= 3) {
-    return "Good delivery overall. Focus on varying your pace and using pauses effectively for emphasis.";
-  } else {
-    return "Work on speaking with more confidence. Practice your delivery and consider your vocal variety.";
+    return "Clear, confident delivery overall.";
   }
-}
-
-function generateOverallFeedback(score: Score, motion: string, stance?: string): string {
-  const total = score.logic + score.rhetoric + score.empathy + score.delivery;
-  const percentage = (total / 30) * 100;
-
-  let baseMessage = "";
-  if (percentage >= 80) {
-    baseMessage = "Outstanding performance! You demonstrated strong debate skills across all categories.";
-  } else if (percentage >= 70) {
-    baseMessage = "Solid work! You're developing good speaking fundamentals.";
-  } else if (percentage >= 60) {
-    baseMessage = "Good effort! Focus on the areas highlighted above for improvement.";
-  } else {
-    baseMessage = "Keep practicing! Every speech makes you stronger.";
+  if (score >= 3) {
+    return "Mostly clear — smooth a few rushed transitions.";
   }
-
-  const stanceText = stance ? ` Your ${stance === "for" ? "support" : "opposition"} was clearly articulated.` : "";
-  
-  return `${baseMessage}${stanceText} Remember, great speakers are made through consistent practice. Try speaking on this topic again or explore a new challenge!`;
+  return "Slow down and emphasize your strongest line.";
 }
 
 function generateMockTranscript(motion: string, stance?: string): string {
-  const stancePrefix = stance === "for" ? "I strongly believe that" : stance === "against" ? "I firmly disagree that" : "In my opinion,";
-  
-  const transcripts = [
-    `${stancePrefix} ${motion.toLowerCase()}. Let me explain my reasoning. First, we need to consider the fundamental principles at stake here. The evidence clearly shows that this approach would benefit society in multiple ways. We must also acknowledge the concerns of those who disagree, but I believe the advantages far outweigh any potential drawbacks. In conclusion, this is the right path forward.`,
-    
-    `${stancePrefix} this is a crucial issue that affects us all. When we examine the facts, it becomes clear that there are strong arguments on both sides. However, I believe that the practical implications strongly support my position. We've seen similar situations in the past, and the outcomes speak for themselves. This is why I stand by my viewpoint on this important matter.`,
-    
-    `${stancePrefix} we need to think carefully about this topic. There are several key points that support my argument. The research demonstrates clear patterns that we cannot ignore. While I understand why some people might disagree, I think the evidence points in a different direction. We must consider not just the immediate effects, but also the long-term consequences of our decisions.`
-  ];
-  
-  return transcripts[Math.floor(Math.random() * transcripts.length)];
+  const stanceText = stance ? ` arguing ${stance}` : "";
+  return `This is a practice speech${stanceText} on: ${motion}. The speaker presented opening claims, supporting reasons, and a closing appeal.`;
 }
 
 function generateMissingPoints(motion: string, stance?: string): string[] {
-  const allMissingPoints = [
-    "Consider addressing economic implications and cost-benefit analysis",
-    "Include statistics or data to support your main arguments",
-    "Acknowledge and refute potential counterarguments more explicitly",
-    "Add personal anecdotes or real-world examples to make it more relatable",
-    "Discuss the ethical considerations and moral framework",
-    "Mention the historical context and precedent for similar situations",
-    "Address the impact on different demographic groups or communities",
-    "Consider the legal or regulatory implications",
-    "Discuss potential unintended consequences or side effects",
-    "Include expert opinions or authoritative sources",
-    "Address the timeline and implementation challenges",
-    "Consider alternative solutions or compromise positions",
-    "Discuss the international or global perspective on this issue",
-    "Address the environmental impact (if applicable)",
-    "Consider the psychological or social effects on individuals"
+  return [
+    `Add a clearer thesis that directly answers "${motion}".`,
+    "Define one key term early so listeners share your framing.",
+    stance
+      ? `Address the strongest objection to arguing ${stance}.`
+      : "Acknowledge a meaningful counterpoint before your rebuttal.",
+    "Close with a concrete next-step ask, not a vague summary.",
   ];
-  
-  // Randomly select 3-5 missing points
-  const numPoints = Math.floor(Math.random() * 3) + 3;
-  const selectedPoints = [];
-  const usedIndices = new Set();
-  
-  while (selectedPoints.length < numPoints && selectedPoints.length < allMissingPoints.length) {
-    const randomIndex = Math.floor(Math.random() * allMissingPoints.length);
-    if (!usedIndices.has(randomIndex)) {
-      selectedPoints.push(allMissingPoints[randomIndex]);
-      usedIndices.add(randomIndex);
-    }
-  }
-  
-  return selectedPoints;
 }
 
-function generateEnhancedArgument(motion: string, missingPoints: string[], stance?: string): string {
-  const stancePrefix = stance === "for" ? "I strongly advocate that" : stance === "against" ? "I firmly oppose the notion that" : "I believe that";
-  
-  return `${stancePrefix} ${motion.toLowerCase()}, and I'd like to present a comprehensive argument for my position.
-
-**Opening Statement:**
-To begin with, this issue strikes at the heart of several fundamental principles that govern our society. When we examine the evidence with careful scrutiny, a clear pattern emerges that strongly supports my viewpoint.
-
-**Main Arguments:**
-First, let's consider the economic implications. The cost-benefit analysis reveals significant advantages that cannot be overlooked. Research and statistics demonstrate measurable impacts that align with my position.
-
-Second, we must acknowledge the ethical framework surrounding this issue. The moral considerations point clearly toward the path I'm advocating, particularly when we consider the effects on various communities and demographic groups.
-
-Third, historical precedent provides valuable insight. We've seen similar situations unfold in the past, and the outcomes consistently support the approach I'm proposing.
-
-**Addressing Counterarguments:**
-While I understand and respect the concerns raised by those who disagree, I believe these objections can be effectively addressed. The perceived drawbacks are often outweighed by the substantial benefits, and many concerns stem from incomplete information or misconceptions.
-
-**Conclusion:**
-In conclusion, when we consider the comprehensive evidence - economic, ethical, historical, and practical - the case becomes compelling. This is not just about immediate effects, but about building a better future for all. The implementation may present challenges, but with proper planning and commitment, we can achieve meaningful progress on this critical issue.
-
-*This enhanced version incorporates stronger logical structure, supporting evidence, acknowledgment of counterarguments, and addresses several of the missing points identified in the analysis.*`;
+function generateEnhancedArgument(
+  motion: string,
+  missingPoints: string[],
+  stance?: string,
+): string {
+  return `Improved outline for "${motion}"${stance ? ` (${stance})` : ""}:\n1. Open with a crisp thesis.\n2. Support with two logical reasons.\n3. Address one counterpoint.\n4. Close with a memorable call to action.\n\nGaps to fill:\n- ${missingPoints.join("\n- ")}`;
 }

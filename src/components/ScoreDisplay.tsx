@@ -5,6 +5,14 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { type ScoreData } from "@/utils/mockScoring";
+import {
+  ALL_CRITERIA,
+  CRITERION_MAX,
+  normalizeCriterionFeedback,
+  type AssessmentCriterion,
+  type FeedbackLengthMinutes,
+  type StructuredFeedback,
+} from "@/types/feedback";
 
 interface CounterArgument {
   rebuttal: string;
@@ -51,13 +59,17 @@ interface ScoreDisplayProps {
   };
   stance?: string;
   score: ScoreData['score'];
-  feedback: ScoreData['feedback'];
+  feedback: StructuredFeedback | ScoreData['feedback'];
   transcript: string;
   missingPoints: string[];
   enhancedArgument: string;
   enhancedFeedback?: EnhancedFeedback;
+  selectedCriteria?: AssessmentCriterion[];
+  feedbackLengthMinutes?: FeedbackLengthMinutes;
+  audioUrl?: string | null;
   onTryAgain: () => void;
   onNewTopic: () => void;
+  hideActions?: boolean;
 }
 
 export function ScoreDisplay({ 
@@ -69,11 +81,17 @@ export function ScoreDisplay({
   missingPoints,
   enhancedArgument,
   enhancedFeedback,
+  selectedCriteria,
+  feedbackLengthMinutes = 10,
+  audioUrl,
   onTryAgain, 
-  onNewTopic 
+  onNewTopic,
+  hideActions = false,
 }: ScoreDisplayProps) {
-  const totalScore = score.total;
-  const maxScore = 30;
+  const criteria = (selectedCriteria?.length ? selectedCriteria : ALL_CRITERIA) as AssessmentCriterion[];
+  const maxScore = criteria.reduce((sum, c) => sum + CRITERION_MAX[c], 0);
+  const totalScore = criteria.reduce((sum, c) => sum + (Number(score[c]) || 0), 0);
+  const shortTier = feedbackLengthMinutes <= 5;
   
   const getScoreColor = (points: number, max: number) => {
     const percentage = (points / max) * 100;
@@ -83,7 +101,7 @@ export function ScoreDisplay({
   };
 
   const getOverallGrade = () => {
-    const percentage = (totalScore / maxScore) * 100;
+    const percentage = maxScore > 0 ? (totalScore / maxScore) * 100 : 0;
     if (percentage >= 90) return { grade: "A+", color: "bg-success", message: "Outstanding!" };
     if (percentage >= 80) return { grade: "A", color: "bg-success", message: "Excellent!" };
     if (percentage >= 70) return { grade: "B", color: "bg-warning", message: "Good work!" };
@@ -94,40 +112,31 @@ export function ScoreDisplay({
 
   const overall = getOverallGrade();
 
-  const categories = [
-    { 
-      name: "Logic", 
-      icon: Target, 
-      score: score.logic, 
-      max: 10, 
-      feedback: feedback.logic,
-      description: "Structure & flow"
-    },
-    { 
-      name: "Rhetoric", 
-      icon: Zap, 
-      score: score.rhetoric, 
-      max: 10, 
-      feedback: feedback.rhetoric,
-      description: "Persuasive language"
-    },
-    { 
-      name: "Empathy", 
-      icon: Heart, 
-      score: score.empathy, 
-      max: 5, 
-      feedback: feedback.empathy,
-      description: "Respectful tone"
-    },
-    { 
-      name: "Delivery", 
-      icon: Trophy, 
-      score: score.delivery, 
-      max: 5, 
-      feedback: feedback.delivery,
-      description: "Fluency & confidence"
-    }
-  ];
+  const categoryMeta: Record<
+    AssessmentCriterion,
+    { name: string; icon: typeof Target; description: string }
+  > = {
+    logic: { name: "Logic", icon: Target, description: "Structure & flow" },
+    rhetoric: { name: "Rhetoric", icon: Zap, description: "Persuasive language" },
+    empathy: { name: "Empathy", icon: Heart, description: "Respectful tone" },
+    delivery: { name: "Delivery", icon: Trophy, description: "Fluency & confidence" },
+  };
+
+  const categories = criteria.map((id) => {
+    const meta = categoryMeta[id];
+    const fb = normalizeCriterionFeedback(
+      (feedback as StructuredFeedback)?.[id] ??
+        (feedback as Record<string, unknown>)?.[id],
+    );
+    return {
+      id,
+      ...meta,
+      score: Number(score[id]) || 0,
+      max: CRITERION_MAX[id],
+      synopsis: fb?.synopsis ?? "",
+      points: (fb?.points ?? []).slice(0, 5),
+    };
+  });
 
   return (
     <div className="w-full max-w-4xl mx-auto space-y-6">
@@ -137,13 +146,30 @@ export function ScoreDisplay({
           <CardTitle className="text-lg font-bold text-foreground">
             {motion.topic}
           </CardTitle>
-          {stance && (
-            <Badge className="bg-primary text-primary-foreground border-0 mx-auto">
-              Argued {stance === "for" ? "FOR" : stance === "against" ? "AGAINST" : "NEUTRAL"}
+          <div className="flex flex-wrap items-center justify-center gap-2 mt-2">
+            {stance && (
+              <Badge className="bg-primary text-primary-foreground border-0">
+                Argued {stance === "for" ? "FOR" : stance === "against" ? "AGAINST" : "NEUTRAL"}
+              </Badge>
+            )}
+            <Badge variant="outline">{feedbackLengthMinutes} min feedback</Badge>
+            <Badge variant="secondary">
+              {criteria.length} criteri{criteria.length === 1 ? "on" : "a"}
             </Badge>
-          )}
+          </div>
         </CardHeader>
       </Card>
+
+      {audioUrl && (
+        <Card className="border-0 shadow-card bg-speech-card/80">
+          <CardContent className="pt-4">
+            <p className="text-sm font-medium text-foreground mb-2">Your recording</p>
+            <audio controls className="w-full" src={audioUrl}>
+              Your browser does not support audio playback.
+            </audio>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Overall Score */}
       <Card className="bg-gradient-to-br from-speech-card to-speech-card/90 border-0 shadow-speech">
@@ -156,7 +182,7 @@ export function ScoreDisplay({
               <h3 className="text-2xl font-bold text-foreground">{totalScore}/{maxScore}</h3>
               <p className="text-muted-foreground">{overall.message}</p>
             </div>
-            <Progress value={(totalScore / maxScore) * 100} className="w-full" />
+            <Progress value={maxScore > 0 ? (totalScore / maxScore) * 100 : 0} className="w-full" />
           </div>
         </CardContent>
       </Card>
@@ -164,7 +190,7 @@ export function ScoreDisplay({
       {/* Category Breakdown */}
       <div className="grid gap-4 md:grid-cols-2">
         {categories.map((category) => (
-          <Card key={category.name} className="bg-gradient-to-br from-speech-card to-speech-card/90 border-0 shadow-card">
+          <Card key={category.id} className="bg-gradient-to-br from-speech-card to-speech-card/90 border-0 shadow-card">
             <CardContent className="pt-4">
               <div className="flex items-center gap-3 mb-3">
                 <div className="p-2 bg-primary/10 rounded-lg">
@@ -185,7 +211,21 @@ export function ScoreDisplay({
                 value={(category.score / category.max) * 100} 
                 className="h-2 mb-3" 
               />
-              <p className="text-sm text-muted-foreground">{category.feedback}</p>
+              {category.synopsis && (
+                <p className="text-sm text-foreground/90 mb-2">{category.synopsis}</p>
+              )}
+              {category.points.length > 0 ? (
+                <ul className="space-y-1.5">
+                  {category.points.map((point, i) => (
+                    <li key={i} className="flex items-start gap-2 text-sm text-muted-foreground">
+                      <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0" />
+                      <span>{point}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-muted-foreground italic">No detailed points for this criterion.</p>
+              )}
             </CardContent>
           </Card>
         ))}
@@ -201,7 +241,7 @@ export function ScoreDisplay({
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="transcript" className="w-full">
-            <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-1.5 sm:gap-1 h-auto p-1.5 sm:p-1">
+            <TabsList className={`grid w-full gap-1.5 sm:gap-1 h-auto p-1.5 sm:p-1 ${shortTier ? "grid-cols-2 sm:grid-cols-3" : "grid-cols-2 sm:grid-cols-3 lg:grid-cols-6"}`}>
               <TabsTrigger value="transcript" className="flex flex-col sm:flex-row items-center justify-center gap-1 text-[10px] sm:text-xs px-2 sm:px-3 py-2.5 sm:py-1.5 min-h-[48px] sm:min-h-0">
                 <MessageSquare className="w-4 h-4 sm:w-3 sm:h-3 flex-shrink-0" />
                 <span className="text-center">Speech</span>
@@ -210,22 +250,26 @@ export function ScoreDisplay({
                 <Lightbulb className="w-4 h-4 sm:w-3 sm:h-3 flex-shrink-0" />
                 <span className="text-center">Missing</span>
               </TabsTrigger>
-              <TabsTrigger value="enhanced" className="flex flex-col sm:flex-row items-center justify-center gap-1 text-[10px] sm:text-xs px-2 sm:px-3 py-2.5 sm:py-1.5 min-h-[48px] sm:min-h-0">
-                <Star className="w-4 h-4 sm:w-3 sm:h-3 flex-shrink-0" />
-                <span className="text-center">Enhanced</span>
-              </TabsTrigger>
-              <TabsTrigger value="analysis" className="flex flex-col sm:flex-row items-center justify-center gap-1 text-[10px] sm:text-xs px-2 sm:px-3 py-2.5 sm:py-1.5 min-h-[48px] sm:min-h-0">
-                <Brain className="w-4 h-4 sm:w-3 sm:h-3 flex-shrink-0" />
-                <span className="text-center">Analysis</span>
-              </TabsTrigger>
-              <TabsTrigger value="counterargs" className="flex flex-col sm:flex-row items-center justify-center gap-1 text-[10px] sm:text-xs px-2 sm:px-3 py-2.5 sm:py-1.5 min-h-[48px] sm:min-h-0">
-                <AlertTriangle className="w-4 h-4 sm:w-3 sm:h-3 flex-shrink-0" />
-                <span className="text-center">Counters</span>
-              </TabsTrigger>
-              <TabsTrigger value="defense" className="flex flex-col sm:flex-row items-center justify-center gap-1 text-[10px] sm:text-xs px-2 sm:px-3 py-2.5 sm:py-1.5 min-h-[48px] sm:min-h-0">
-                <Shield className="w-4 h-4 sm:w-3 sm:h-3 flex-shrink-0" />
-                <span className="text-center">Defense</span>
-              </TabsTrigger>
+              {!shortTier && (
+                <>
+                  <TabsTrigger value="enhanced" className="flex flex-col sm:flex-row items-center justify-center gap-1 text-[10px] sm:text-xs px-2 sm:px-3 py-2.5 sm:py-1.5 min-h-[48px] sm:min-h-0">
+                    <Star className="w-4 h-4 sm:w-3 sm:h-3 flex-shrink-0" />
+                    <span className="text-center">Enhanced</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="analysis" className="flex flex-col sm:flex-row items-center justify-center gap-1 text-[10px] sm:text-xs px-2 sm:px-3 py-2.5 sm:py-1.5 min-h-[48px] sm:min-h-0">
+                    <Brain className="w-4 h-4 sm:w-3 sm:h-3 flex-shrink-0" />
+                    <span className="text-center">Analysis</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="counterargs" className="flex flex-col sm:flex-row items-center justify-center gap-1 text-[10px] sm:text-xs px-2 sm:px-3 py-2.5 sm:py-1.5 min-h-[48px] sm:min-h-0">
+                    <AlertTriangle className="w-4 h-4 sm:w-3 sm:h-3 flex-shrink-0" />
+                    <span className="text-center">Counters</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="defense" className="flex flex-col sm:flex-row items-center justify-center gap-1 text-[10px] sm:text-xs px-2 sm:px-3 py-2.5 sm:py-1.5 min-h-[48px] sm:min-h-0">
+                    <Shield className="w-4 h-4 sm:w-3 sm:h-3 flex-shrink-0" />
+                    <span className="text-center">Defense</span>
+                  </TabsTrigger>
+                </>
+              )}
             </TabsList>
             
             <TabsContent value="transcript" className="mt-4">
@@ -257,7 +301,9 @@ export function ScoreDisplay({
                 )}
               </div>
             </TabsContent>
-            
+
+            {!shortTier && (
+            <>
             <TabsContent value="enhanced" className="mt-4">
               <div className="prose prose-sm max-w-none">
                 <h4 className="text-foreground font-semibold mb-3">
@@ -550,6 +596,8 @@ export function ScoreDisplay({
                 </TabsContent>
               </>
             )}
+            </>
+            )}
           </Tabs>
         </CardContent>
       </Card>
@@ -565,6 +613,7 @@ export function ScoreDisplay({
       </Card>
 
       {/* Action Buttons */}
+      {!hideActions && (
       <div className="grid gap-3 md:grid-cols-3">
         <Button
           onClick={onTryAgain}
@@ -599,6 +648,7 @@ export function ScoreDisplay({
           Share
         </Button>
       </div>
+      )}
     </div>
   );
 }

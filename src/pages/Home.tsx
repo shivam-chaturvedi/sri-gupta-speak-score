@@ -4,10 +4,11 @@ import { Button } from "@/components/ui/button";
 import { NewsletterSubscribeBlock } from "@/components/NewsletterSubscribeBlock";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { MotionCard } from "@/components/MotionCard";
+import { MotionCard, type SpeechStartOptions } from "@/components/MotionCard";
 import { getDailyMotion, getRandomMotions, motions as allMotionsData, type Motion } from "@/data/motions";
 import { useAuth } from "@/contexts/AuthContext";
 import { Link, useNavigate } from "react-router-dom";
+import { ALL_CRITERIA } from "@/types/feedback";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader,
@@ -31,8 +32,23 @@ const Home = () => {
     ? motions : allMotionsData.filter(m => m.category === selectedTheme);
   const dailyMotion = motions[0];
 
-  const handleStartSpeech = (motion: Motion, duration: number, stance?: string) =>
-    navigate("/recording", { state: { motion, duration, stance } });
+  const handleStartSpeech = (
+    motion: Motion,
+    duration: number,
+    stance: string | undefined,
+    options: SpeechStartOptions,
+  ) =>
+    navigate("/recording", {
+      state: {
+        motion,
+        duration,
+        stance,
+        feedbackLengthMinutes: options.feedbackLengthMinutes,
+        selectedCriteria: options.selectedCriteria?.length
+          ? options.selectedCriteria
+          : ALL_CRITERIA,
+      },
+    });
 
   return (
     <div className="min-h-screen bg-speech-bg">

@@ -3,7 +3,7 @@ import { Mic, Target, Trophy, Zap, Heart, Sparkles, Loader2, User, LogOut } from
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { MotionCard } from "@/components/MotionCard";
+import { MotionCard, type SpeechStartOptions } from "@/components/MotionCard";
 import { VoiceRecorder } from "@/components/VoiceRecorder";
 import { ScoreDisplay } from "@/components/ScoreDisplay";
 import { ApiKeyModal } from "@/components/ApiKeyModal";
@@ -13,6 +13,13 @@ import { aiService } from "@/services/aiService";
 import { useAuth } from "@/contexts/AuthContext";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  ALL_CRITERIA,
+  type AssessmentCriterion,
+  type FeedbackLengthMinutes,
+} from "@/types/feedback";
+import { saveDebateSession } from "@/services/debateSessionService";
+import { buildSpeakerProfileContext } from "@/services/speakerProfile";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -32,6 +39,8 @@ interface SessionData {
   duration: number;
   stance?: string;
   audioBlob?: Blob;
+  feedbackLengthMinutes: FeedbackLengthMinutes;
+  selectedCriteria: AssessmentCriterion[];
 }
 
 type TopicMotion = Motion & { isFeatured?: boolean };
@@ -115,49 +124,76 @@ const Index = () => {
   const dailyMotion = motions[0];
 
   const resetSessionForRetry = () => {
-    setSessionData(prev => {
+    setSessionData((prev) => {
       if (!prev) return prev;
       return {
         motion: prev.motion,
         duration: prev.duration,
         stance: prev.stance,
+        feedbackLengthMinutes: prev.feedbackLengthMinutes,
+        selectedCriteria: prev.selectedCriteria,
       };
     });
   };
 
-  const resetRecorderComponent = () => setRecorderResetCounter(prev => prev + 1);
+  const resetRecorderComponent = () => setRecorderResetCounter((prev) => prev + 1);
 
-  const handleStartSpeech = (motion: Motion, duration: number, stance?: string) => {
-    setSessionData({ motion, duration, stance });
+  const handleStartSpeech = (
+    motion: Motion,
+    duration: number,
+    stance: string | undefined,
+    options: SpeechStartOptions,
+  ) => {
+    setSessionData({
+      motion,
+      duration,
+      stance,
+      feedbackLengthMinutes: options.feedbackLengthMinutes,
+      selectedCriteria: options.selectedCriteria?.length
+        ? options.selectedCriteria
+        : ALL_CRITERIA,
+    });
     setCurrentState("recording");
   };
 
   const handleRecordingComplete = async (audioBlob: Blob, transcript?: string) => {
     if (!sessionData) return;
-    
+
     setSessionData({ ...sessionData, audioBlob });
-    
-    console.log('Recording complete. Transcript received:', transcript);
-    console.log('Transcript length:', transcript?.length || 0);
-    
-    // AI analysis - require minimum transcript length
+
     if (transcript && transcript.trim().length > 20) {
       setIsAnalyzing(true);
       try {
-        console.log('Starting AI analysis with transcript:', transcript);
+        const speakerProfileContext = user
+          ? await buildSpeakerProfileContext(user.id)
+          : undefined;
         const results = await aiService.analyzeSpeeches({
           transcript,
           topic: sessionData.motion.topic,
           stance: sessionData.stance,
-          duration: sessionData.duration
+          duration: sessionData.duration,
+          feedbackLengthMinutes: sessionData.feedbackLengthMinutes,
+          selectedCriteria: sessionData.selectedCriteria,
+          speakerProfileContext,
         });
-        console.log('AI analysis successful:', results);
         setScoreData(results);
         setCurrentState("results");
+
+        if (user) {
+          await saveDebateSession({
+            userId: user.id,
+            motion: sessionData.motion,
+            stance: sessionData.stance,
+            duration: sessionData.duration,
+            transcript,
+            results,
+            audioBlob,
+            feedbackLengthMinutes: sessionData.feedbackLengthMinutes,
+            selectedCriteria: sessionData.selectedCriteria,
+          });
+        }
       } catch (error) {
-        console.error('AI analysis failed:', error);
-        const message = error instanceof Error ? error.message : "AI analysis failed. Please restart your speech.";
-        console.warn('Gemini issue suppressed from UI:', message);
+        console.error("AI analysis failed:", error);
         resetSessionForRetry();
         resetRecorderComponent();
         setScoreData(null);
@@ -166,12 +202,12 @@ const Index = () => {
         setIsAnalyzing(false);
       }
     } else {
-    console.warn('No valid transcript for AI analysis. Transcript:', transcript);
-    setScoreData(null);
-    setCurrentState("recording");
-    resetSessionForRetry();
-    resetRecorderComponent();
-  }
+      console.warn("No valid transcript for AI analysis. Transcript:", transcript);
+      setScoreData(null);
+      setCurrentState("recording");
+      resetSessionForRetry();
+      resetRecorderComponent();
+    }
   };
 
   const handleApiKeySet = (apiKey: string) => {
@@ -235,6 +271,8 @@ const Index = () => {
           missingPoints={scoreData.missingPoints}
           enhancedArgument={scoreData.enhancedArgument}
           enhancedFeedback={scoreData.enhancedFeedback}
+          selectedCriteria={sessionData.selectedCriteria}
+          feedbackLengthMinutes={sessionData.feedbackLengthMinutes}
           onTryAgain={handleTryAgain}
           onNewTopic={handleNewTopic}
         />
